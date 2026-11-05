@@ -10,7 +10,7 @@ import { Auth } from '../auth';
   templateUrl: './login.html',
 })
 export class Login {
-  rut = '';
+  run = '';
   nombre = '';
   email = '';
   password = '';
@@ -18,22 +18,24 @@ export class Login {
   errorRegistro = signal('');
   mostrarClave = signal(false);
   cargando = signal(false);
-  rutValido = signal(true);
+  runValido = signal(true);
 
   isToggled = signal(false);
   avisoClaveUnica = signal(false);
 
+  aceptaPrivacidad = false;
+
   constructor(private auth: Auth, private router: Router) { }
 
 
-  onRutChange(valor: string) {
-    this.rut = this.formatearRut(valor);
-    const limpio = this.rut.replace(/[.\-]/g, '');
-    // No muestra error hasta que el RUT esté casi completo
-    this.rutValido.set(limpio.length < 8 || this.validarRut(this.rut));
+  onRunChange(valor: string) {
+    this.run = this.formatearRun(valor);
+    const limpio = this.run.replace(/[.\-]/g, '');
+    // No muestra error hasta que el run esté casi completo
+    this.runValido.set(limpio.length < 8 || this.validarRun(this.run));
   }
 
-  formatearRut(valor: string): string {
+  formatearRun(valor: string): string {
     const limpio = valor.replace(/[^0-9kK]/g, '').toUpperCase().slice(0, 9);
     if (limpio.length <= 1) return limpio;
     const cuerpo = limpio.slice(0, -1);
@@ -41,8 +43,8 @@ export class Login {
     return cuerpo.replace(/\B(?=(\d{3})+(?!\d))/g, '.') + '-' + dv;
   }
 
-  validarRut(rut: string): boolean {
-    const limpio = rut.replace(/[.\-\s]/g, '').toUpperCase();
+  validarRun(run: string): boolean {
+    const limpio = run.replace(/[.\-\s]/g, '').toUpperCase();
     if (!/^\d{7,8}[0-9K]$/.test(limpio)) return false;
     const cuerpo = limpio.slice(0, -1);
     const dv = limpio.slice(-1);
@@ -71,14 +73,14 @@ export class Login {
 
   async onSubmit() {
     if (!this.email.trim() || !this.password) {
-      this.errorLogin.set('Ingresa tu correo o RUT y tu contraseña.');
+      this.errorLogin.set('Ingresa tu correo o RUN y tu contraseña.');
       return;
     }
     this.cargando.set(true);
     const ok = await this.auth.attemptLogin(this.email.trim(), this.password);
     this.cargando.set(false);
     if (!ok) {
-      this.errorLogin.set('Correo/RUT o contraseña incorrectos.');
+      this.errorLogin.set('Correo/RUN o contraseña incorrectos.');
       return;
     }
     this.errorLogin.set('');
@@ -87,24 +89,29 @@ export class Login {
   }
 
   async onRegister() {
-    if (!this.nombre.trim() || !this.email.trim() || !this.rut.trim() || !this.password) {
+    if (!this.nombre.trim() || !this.email.trim() || !this.run.trim() || !this.password) {
       this.errorRegistro.set('Completa todos los campos.');
+      return;
+    }
+    if (!this.aceptaPrivacidad) {
+      this.errorRegistro.set('Debes leer y aceptar el aviso de privacidad para crear tu cuenta.');
       return;
     }
     if (this.password.length < 10) {
       this.errorRegistro.set('La contraseña debe tener al menos 10 caracteres.');
       return;
     }
-    if (!this.validarRut(this.rut)) {
-      this.errorRegistro.set('El RUT ingresado no es válido.');
+    if (!this.validarRun(this.run)) {
+      this.errorRegistro.set('El RUN ingresado no es válido.');
       return;
     }
     this.cargando.set(true);
     const res = await this.auth.register(
       this.nombre.trim(),
       this.email.trim(),
-      this.rut.trim(),
-      this.password
+      this.run.trim(),
+      this.password,
+      this.aceptaPrivacidad
     );
     this.cargando.set(false);
     if (!res.ok) {

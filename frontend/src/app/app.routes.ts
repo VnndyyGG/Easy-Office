@@ -7,9 +7,13 @@ import { AdminDashboard } from './admin-dashboard/admin-dashboard';
 import { ComercialDashboard } from './comercial-dashboard/comercial-dashboard';
 import { FinanzasDashboard } from './finanzas-dashboard/finanzas-dashboard';
 import { authGuard, roleGuard } from './auth.guard';
+import { Firmar } from './firmar/firmar';
+import { Privacidad } from './privacidad/privacidad';
 
 export const routes: Routes = [
   { path: '', component: Login },
+  { path: 'firmar/:token', component: Firmar },
+  { path: 'privacidad', component: Privacidad },
   {
     path: '',
     component: Shell,

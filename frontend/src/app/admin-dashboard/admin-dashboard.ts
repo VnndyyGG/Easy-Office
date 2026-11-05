@@ -47,6 +47,8 @@ export class AdminDashboard implements OnInit {
   aviso = signal('');
   ocupado = signal(false);
 
+  filtroRol = signal('');
+  buscarUsuario = signal('');
   tramites = signal<TramiteAdmin[]>([]);
   usuarios = signal<Rol[]>([]);
   plantillas = signal<PlantillaAdmin[]>([]);
@@ -58,12 +60,12 @@ export class AdminDashboard implements OnInit {
   // Filtros
   filtroEstado = signal('');
   buscarTramite = signal('');
-  filtroRol = signal('');
+
   mes = signal(new Date().toISOString().slice(0, 7));
 
   // Formularios
   mostrarNuevo = signal(false);
-  nuevo: NuevoUsuario = { name: '', email: '', rut: '', tipo: 'comercial', password: '' };
+  nuevo: NuevoUsuario = { name: '', email: '', run: '', tipo: 'comercial', password: '' };
   precios: Record<number, number> = {};
 
   readonly clp = clp;
@@ -78,7 +80,17 @@ export class AdminDashboard implements OnInit {
       (!estado || t.status === estado) &&
       (!q || t.folio.toLowerCase().includes(q) || t.client_name.toLowerCase().includes(q)));
   });
-  usuariosFiltrados = computed(() => this.usuarios().filter(u => !this.filtroRol() || u.tipo === this.filtroRol()));
+  usuariosFiltrados = computed(() => {
+    const rol = this.filtroRol();
+    const q = this.buscarUsuario().trim().toLowerCase();
+    const qRun = this.normalizarRun(q);
+    return this.usuarios().filter(u =>
+      (!rol || u.tipo === rol) &&
+      (!q ||
+        u.name.toLowerCase().includes(q) ||
+        (qRun !== '' && this.normalizarRun(u.run ?? '').includes(qRun))));
+  });
+
   activos = computed(() => this.tramites().filter(t => !CERRADOS.includes(t.status)).length);
   /** Trámites pagados que quedaron sin ejecutivo (por ejemplo, si no había ninguno activo al pagar). */
   sinAsignar = computed(() => this.tramites().filter(t => !t.assigned_id && this.puedeReasignar(t)).length);
@@ -89,8 +101,8 @@ export class AdminDashboard implements OnInit {
     return filas.map(f => ({ ...f, label: this.estadoLabel(f.status), pct: Math.round((f.total / max) * 100) }));
   });
   private nombres = computed(() => new Map(this.usuarios().map(u => [u.id, u.name])));
-
-  constructor(private api: AdminApi) {}
+  private normalizarRun(run: string) { return run.replace(/[^0-9k]/gi, '').toLowerCase(); }
+  constructor(private api: AdminApi) { }
 
   ngOnInit() { this.cargarTodo(); }
 
@@ -156,10 +168,10 @@ export class AdminDashboard implements OnInit {
   }
   crearUsuario() {
     const n = this.nuevo;
-    if (!n.name.trim() || !n.email.trim() || !n.rut.trim() || !n.password) { this.error.set('Completa todos los campos.'); return; }
+    if (!n.name.trim() || !n.email.trim() || !n.run.trim() || !n.password) { this.error.set('Completa todos los campos.'); return; }
     return this.accion(async () => {
       await firstValueFrom(this.api.crearUsuario({ ...n, name: n.name.trim(), email: n.email.trim() }));
-      this.nuevo = { name: '', email: '', rut: '', tipo: 'comercial', password: '' };
+      this.nuevo = { name: '', email: '', run: '', tipo: 'comercial', password: '' };
       this.mostrarNuevo.set(false);
     }, `Usuario ${n.name.trim()} creado.`);
   }

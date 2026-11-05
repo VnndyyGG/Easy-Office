@@ -1,0 +1,12 @@
+.priv { max-width: 820px; margin: 2rem auto; padding: 0 1rem 3rem; font-family: system-ui, sans-serif; color: #14181a; line-height: 1.5; }
+h1 { margin-top: 2rem; } h2 { font-size: 1.05rem; margin-top: 1.5rem; }
+.muted { color: #4b5563; font-size: .85rem; }
+.alerta { background: #fef3e2; color: #b45309; padding: .5rem .75rem; border-radius: 6px; font-size: .85rem; }
+.caja, .sol { border: 1px solid #d5ddd8; border-radius: 10px; padding: 1rem; margin: 1rem 0; }
+label { display: block; margin: .6rem 0; font-size: .9rem; }
+select, textarea { display: block; width: 100%; padding: .5rem; margin-top: .25rem; box-sizing: border-box; }
+.btn { background: #15803d; color: #fff; border: 0; border-radius: 8px; padding: .6rem 1rem; cursor: pointer; }
+.btn-s { background: #fff; border: 1px solid #15803d; color: #15803d; border-radius: 6px; padding: .35rem .7rem; cursor: pointer; }
+.btn:disabled { opacity: .5; }
+.fila { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: .5rem; }
+.error { color: #b91c1c; } .ok { color: #15803d; }

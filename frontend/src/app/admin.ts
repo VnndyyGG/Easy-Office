@@ -2,8 +2,8 @@ import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Auth, Rol } from './auth';
 import { CaseRow, Plantilla, Servicio } from './tramites';
-
-const API = 'http://localhost:3000/api';
+import { environment } from '../environments/environment.development';
+const API = environment.apiUrl;
 
 // ---- Modelos del panel de administración (como los devuelve el backend) ----
 export type TramiteAdmin = CaseRow & { client_name: string; assigned_id: number | null; assigned_name: string | null };
@@ -17,7 +17,7 @@ export interface EventoAuditoria {
   id: number; actor_id: number | null; action: string; entity: string; entity_id: number | null;
   metadata: Record<string, unknown>; created_at: string;
 }
-export interface NuevoUsuario { name: string; email: string; rut: string; tipo: string; password: string; }
+export interface NuevoUsuario { name: string; email: string; run: string; tipo: string; password: string; }
 
 /** Llamadas que solo puede hacer el administrador (el backend lo vuelve a comprobar en cada ruta). */
 @Injectable({ providedIn: 'root' })

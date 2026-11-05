@@ -1,0 +1,47 @@
+<main class="firmar">
+  <img src="logo.jpg" alt="Easy Office" class="logo">
+  @if (cargando()) {
+    <p>Cargando…</p>
+  } @else if (!info()) {
+    <p class="error" role="alert">{{ error() || 'Enlace de firma inválido.' }}</p>
+  } @else {
+    <h1>Firma de documento</h1>
+    <p class="muted">Trámite {{ info()!.folio }} · {{ info()!.servicio }} · versión {{ info()!.documentVersion }}</p>
+    <p>Firmante: <strong>{{ info()!.signer.name }}</strong> · RUN {{ info()!.signer.run }}@if (info()!.signer.capacity) { · {{ info()!.signer.capacity }} }</p>
+
+    @if (terminado() === 'firmado' || info()!.signer.status === 'firmado') {
+      <section class="ok">
+        <h2>Listo, firmaste el documento</h2>
+        <p>Cuando todos los firmantes hayan firmado podrás descargar el documento firmado con su constancia.</p>
+        @if (info()!.request.status === 'completada') { <button class="btn" (click)="descargar()">Descargar documento firmado</button> }
+      </section>
+    } @else if (terminado() === 'rechazado' || info()!.signer.status === 'rechazado') {
+      <section class="ok"><h2>Rechazaste firmar</h2><p>Avisamos al ejecutivo del trámite.</p></section>
+    } @else if (!disponible) {
+      <section class="ok"><h2>Esta solicitud ya no está disponible</h2><p>Estado: {{ info()!.request.status }}. Si necesitas firmar, pide un nuevo enlace.</p></section>
+    } @else {
+      <p class="muted">Lee el documento completo antes de firmar. Vence el {{ info()!.request.expiresAt.slice(0, 10) }}.</p>
+      <pre class="documento" tabindex="0">{{ info()!.content }}</pre>
+      <p class="huella">Huella SHA-256 del texto que vas a firmar: <code>{{ info()!.documentSha256 }}</code></p>
+
+      <section class="paso">
+        <h2>1. Recibe tu código</h2>
+        <button class="btn" [disabled]="ocupado()" (click)="pedirCodigo()">{{ codigoEnviado() ? 'Reenviar código' : 'Enviarme un código por correo' }}</button>
+      </section>
+
+      @if (codigoEnviado()) {
+        <section class="paso">
+          <h2>2. Firma</h2>
+          <label>Código de 6 dígitos <input name="codigo" inputmode="numeric" maxlength="6" autocomplete="one-time-code" [(ngModel)]="codigo"></label>
+          <label>Escribe tu nombre completo <input name="nombre" autocomplete="name" [(ngModel)]="nombreEscrito" [placeholder]="info()!.signer.name"></label>
+          <label class="chk"><input type="checkbox" name="acepta" [(ngModel)]="acepta"> <span>{{ info()!.declaration.text }}</span></label>
+          <button class="btn" [disabled]="ocupado() || codigo.length !== 6 || !nombreEscrito.trim() || !acepta" (click)="firmar()">Firmar documento</button>
+        </section>
+      }
+      <p><button class="link" [disabled]="ocupado()" (click)="rechazar()">No quiero firmar</button></p>
+      <p class="legal">Firma electrónica simple (Ley N.º 19.799). Registramos tu nombre, RUN, correo, fecha y hora, IP y navegador como evidencia de la firma. <a href="/privacidad" target="_blank" rel="noopener">Aviso de privacidad</a>.</p>
+    }
+    @if (aviso()) { <p class="aviso" role="status">{{ aviso() }}</p> }
+    @if (error()) { <p class="error" role="alert">{{ error() }}</p> }
+  }
+</main>

@@ -1,0 +1,76 @@
+<main class="priv">
+  <p><a [routerLink]="conSesion ? '/' + auth.currentRole()?.tipo : '/'">← Volver</a></p>
+  @if (politica(); as p) {
+    <h1>Aviso de privacidad</h1>
+    <p class="muted">Versión {{ p.version }} · vigente desde {{ p.vigenteDesde }}</p>
+    @if (p.revisionLegalPendiente) { <p class="alerta">Texto base pendiente de revisión por el asesor legal de la empresa.</p> }
+
+    <h2>Quién es el responsable</h2>
+    <p>{{ p.responsable.nombre.valor }} · RUT {{ p.responsable.rut.valor }}<br>{{ p.responsable.domicilio.valor }}<br>Contacto para ejercer tus derechos: {{ p.responsable.contacto.valor }}</p>
+
+    <h2>Qué datos tratamos</h2>
+    <ul>@for (d of p.datos; track d.categoria) { <li><strong>{{ d.categoria }}.</strong> {{ d.detalle }}</li> }</ul>
+
+    <h2>Para qué y con qué fundamento</h2>
+    <ul>@for (f of p.finalidades; track f.finalidad) { <li>{{ f.finalidad }} <em>({{ f.base }})</em></li> }</ul>
+
+    <h2>Con quién los compartimos</h2>
+    <ul>@for (d of p.destinatarios; track d.quien) { <li><strong>{{ d.quien }}.</strong> {{ d.para }}</li> }</ul>
+
+    <h2>Cuánto tiempo los conservamos</h2>
+    <p>{{ p.conservacion }}</p>
+
+    <h2>Tus derechos</h2>
+    <ul>@for (d of p.derechos; track d.derecho) { <li><strong>{{ d.derecho }}.</strong> {{ d.detalle }}</li> }</ul>
+    <p>{{ p.plazos }}</p>
+    <p>{{ p.canal }}</p>
+    <p>{{ p.reclamo }}</p>
+
+    <h2>Cómo cuidamos tus datos</h2>
+    <ul>@for (s of p.seguridad; track s) { <li>{{ s }}</li> }</ul>
+
+    @if (pendienteAceptar) {
+      <section class="caja"><p>Aún no registramos que leíste esta versión.</p><button class="btn" [disabled]="ocupado()" (click)="aceptar()">Leí el aviso</button></section>
+    }
+  } @else if (error()) { <p class="error">{{ error() }}</p> }
+
+  @if (conSesion) {
+    <h1>Mi privacidad</h1>
+    <section class="caja">
+      <h2>Descargar mis datos</h2>
+      <p>Una copia en JSON de lo que guardamos sobre ti (acceso y portabilidad).</p>
+      <button class="btn" [disabled]="ocupado()" (click)="descargarMisDatos()">Descargar mis datos</button>
+    </section>
+
+    <section class="caja">
+      <h2>Ejercer un derecho</h2>
+      <label>Tipo de solicitud
+        <select name="tipo" [(ngModel)]="tipo">@for (t of tipos; track t[0]) { <option [value]="t[0]">{{ t[1] }}</option> }</select>
+      </label>
+      <label>Detalle (opcional) <textarea name="detalle" rows="3" maxlength="2000" [(ngModel)]="detalle"></textarea></label>
+      <button class="btn" [disabled]="ocupado()" (click)="crear()">Enviar solicitud</button>
+    </section>
+
+    <h2>{{ esAdmin ? 'Solicitudes de todos los titulares' : 'Mis solicitudes' }}</h2>
+    @if (!solicitudes().length) { <p class="muted">No hay solicitudes.</p> }
+    @for (s of solicitudes(); track s.id) {
+      <article class="sol">
+        <strong>{{ nombreTipo(s.type) }}</strong> · {{ s.status.replace('_', ' ') }}
+        @if (esAdmin) { · {{ s.user_name }} ({{ s.user_email }}) }
+        <div class="muted">Recibida {{ s.created_at.slice(0, 10) }} · responder a más tardar el {{ s.due_at.slice(0, 10) }}@if (s.extended) { (prorrogada) }</div>
+        @if (s.detail) { <div>{{ s.detail }}</div> }
+        @if (s.resolution) { <div><em>Respuesta:</em> {{ s.resolution }}</div> }
+        @if (esAdmin && abierta(s)) {
+          <div class="fila">
+            @if (s.status === 'recibida') { <button class="btn-s" (click)="tomar(s)">Marcar en proceso</button> }
+            @if (!s.extended) { <button class="btn-s" (click)="prorrogar(s)">Prorrogar plazo</button> }
+            <button class="btn-s" (click)="cerrar(s, 'resuelta')">Resolver</button>
+            <button class="btn-s" (click)="cerrar(s, 'rechazada')">Rechazar (fundado)</button>
+          </div>
+        }
+      </article>
+    }
+  }
+  @if (aviso()) { <p class="ok" role="status">{{ aviso() }}</p> }
+  @if (error() && politica()) { <p class="error" role="alert">{{ error() }}</p> }
+</main>

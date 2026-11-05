@@ -1,21 +1,25 @@
 import { Injectable, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
-
+import { environment } from '../environments/environment';
+const API_URL = environment.apiUrl;
 export interface Rol {
   id: number;
   name: string;
   email: string;
-  rut: string;
+  run: string;
   role: string;
   initials: string;
   avatarBg: string;
   crumb: string;
   tipo: 'cliente' | 'admin' | 'comercial' | 'finanzas';
   active: boolean;
+  privacidadAceptada: boolean;
 }
 
-const API_URL = 'http://localhost:3000/api';
+
+
+
 /** Prefijo del avance de formularios guardado en localStorage (ver TramiteDetalle). */
 export const PREFIJO_AVANCE = 'eo-avance-';
 
@@ -48,10 +52,10 @@ export class Auth {
     }
   }
 
-  async register(name: string, email: string, rut: string, password: string): Promise<{ ok: boolean; message?: string }> {
+  async register(name: string, email: string, run: string, password: string, acceptPrivacy: boolean): Promise<{ ok: boolean; message?: string }> {
     try {
       const result: any = await firstValueFrom(
-        this.http.post(`${API_URL}/auth/register`, { name, email, rut, password })
+        this.http.post(`${API_URL}/auth/register`, { name, email, run, password, acceptPrivacy })
       );
       this.guardarSesion(result.token, result.perfil);
       return { ok: true };
@@ -60,6 +64,13 @@ export class Auth {
       const msg = e.error?.error?.message || e.error?.message || 'No se pudo crear la cuenta.';
       return { ok: false, message: msg };
     }
+  }
+
+  async aceptarPrivacidad(version: string) {
+    await firstValueFrom(this.http.post(`${API_URL}/privacidad/aceptar`, { version }, { headers: { Authorization: `Bearer ${this.token()}` } }));
+    const p = { ...this.currentRole()!, privacidadAceptada: true };
+    this.currentRole.set(p);
+    sessionStorage.setItem('perfil', JSON.stringify(p));
   }
 
   private guardarSesion(token: string, perfil: Rol) {

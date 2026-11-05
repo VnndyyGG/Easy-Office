@@ -38,13 +38,13 @@
 
       @if (!isToggled()) {
       <div class="view">
-        <p class="sub">Ingresa con tu correo o tu RUT y tu contraseña.</p>
+        <p class="sub">Ingresa con tu correo o tu RUN y tu contraseña.</p>
 
         <form class="login-form" (ngSubmit)="onSubmit()">
           <div class="field">
-            <label for="login-email">Correo electrónico o RUT</label>
+            <label for="login-email">Correo electrónico o RUN</label>
             <input id="login-email" type="text" name="email" [(ngModel)]="email" required autocomplete="username"
-              placeholder="tucorreo@easyoffice.cl o 12.345.678-5">
+              placeholder="tucorreo@gmail.com o 12.345.678-5">
           </div>
           <div class="field">
             <label for="login-password">Contraseña</label>
@@ -71,11 +71,11 @@
 
         <form class="login-form" (ngSubmit)="onRegister()">
           <div class="field">
-            <label for="reg-rut">RUT</label>
-            <input id="reg-rut" type="text" name="rut" [ngModel]="rut" (ngModelChange)="onRutChange($event)" required
+            <label for="reg-run">RUN</label>
+            <input id="reg-run" type="text" name="run" [ngModel]="run" (ngModelChange)="onRunChange($event)" required
               maxlength="12" autocomplete="off" placeholder="12.345.678-9">
-            @if (!rutValido()) {
-            <small class="field-error">RUT inválido, revisa el dígito verificador.</small>
+            @if (!runValido()) {
+            <small class="field-error">RUN inválido, revisa el dígito verificador.</small>
             }
           </div>
           <div class="field">
@@ -103,21 +103,23 @@
           <p class="login-error" role="alert">{{ errorRegistro() }}</p>
           }
 
+          <!-- login.html: dentro del form de registro, antes del botón submit -->
+          <label class="privacidad-check">
+            <input type="checkbox" name="aceptaPrivacidad" [(ngModel)]="aceptaPrivacidad" required>
+
+            <span>
+              He leído el
+              <a href="/privacidad" target="_blank" rel="noopener">
+                aviso de privacidad
+              </a>
+              y sé cómo ejercer mis derechos sobre mis datos personales.
+            </span>
+          </label>
+
           <button type="submit" class="btn-primary" [disabled]="cargando()">
             {{ cargando() ? 'Creando cuenta...' : 'Crear cuenta' }}
           </button>
 
-          <div class="divider"><span>o</span></div>
-
-          <button type="button" class="btn-clave" (click)="registrarConClaveUnica()">
-            Registrarse con ClaveÚnica
-          </button>
-
-          @if (avisoClaveUnica()) {
-          <p class="login-info" role="status">
-            Próximamente: la integración con ClaveÚnica estará disponible en un próximo sprint.
-          </p>
-          }
         </form>
       </div>
       }

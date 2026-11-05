@@ -157,9 +157,8 @@
   }
 
   @if (activeTab() === 'clientes') {
-    <div class="scope-note">Cada búsqueda queda registrada en la auditoría (RF-10)</div>
     <form class="search-bar" (ngSubmit)="buscar()">
-      <input type="text" name="q" placeholder="Nombre, RUT o correo del cliente" maxlength="120"
+      <input type="text" name="q" placeholder="Nombre, RUN o correo del cliente" maxlength="120"
         [ngModel]="q()" (ngModelChange)="q.set($event); errorBusqueda.set('')">
       <button class="btn-primary" type="submit" [disabled]="buscando()">Buscar</button>
     </form>
@@ -171,7 +170,7 @@
           <div class="cr-head">
             <div>
               <h3>{{ c.name }}</h3>
-              <div class="cr-meta">{{ c.rut ? rutConPuntos(c.rut) : 'Sin RUT' }} · {{ c.email }}</div>
+              <div class="cr-meta">{{ c.run ? runConPuntos(c.run) : 'Sin RUN' }} · {{ c.email }}</div>
             </div>
             <button class="row-action" (click)="verCliente(c)">Ver trámites</button>
           </div>

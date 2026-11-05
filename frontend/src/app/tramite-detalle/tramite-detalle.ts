@@ -4,7 +4,17 @@ import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import {
-  ArticuloElegido, CampoPlantilla, CaseDetail, Capabilities, DireccionSugerida, Notificacion, Pago, Plantilla, Tramites,
+  ArticuloElegido,
+  CampoPlantilla,
+  CaseDetail,
+  Capabilities,
+  DireccionSugerida,
+  Notificacion,
+  Pago,
+  Plantilla,
+  Tramites,
+  FirmaEstado,
+  Firmante
 } from '../tramites';
 import { ESTADOS, clp, indiceActual, mensajeError, pasosDe } from '../flujo';
 import { Auth, PREFIJO_AVANCE } from '../auth';
@@ -45,6 +55,17 @@ export class TramiteDetalle implements OnInit {
   plantillas = signal<Plantilla[]>([]);
   caps = signal<Capabilities | null>(null);
 
+  firma = signal<FirmaEstado | null>(null);
+  firmantes = signal<Firmante[]>([]);
+
+  hayPrefill = computed(
+    () => Object.keys(this.tramite()?.prefill ?? {}).length > 0
+  );
+
+  puedeFirmarAvanzada = computed(
+    () => this.tramite()?.signature_level !== 'avanzada'
+      || !!this.caps()?.firmaElectronicaAvanzada
+  );
   cargando = signal(true);
   ocupado = signal(false);
   error = signal('');
@@ -222,6 +243,12 @@ export class TramiteDetalle implements OnInit {
       this.notifs.set(notifs.items);
       this.plantillas.set(plantillas.items);
       this.caps.set(caps);
+      if (
+        t.requires_signature &&
+        ['aprobado', 'pendiente_firma', 'firmado', 'entregado', 'completado'].includes(t.status)
+      ) {
+        await this.cargarFirma();
+      }
       this.contenido.set(t.documents[0]?.content ?? '');
       if (t.template_id && this.plantillaId() === null && plantillas.items.some(p => p.id === t.template_id)) this.elegirPlantilla(String(t.template_id));
       if (!CONSERVAR.includes(t.status)) this.borrarAvance();
@@ -232,7 +259,83 @@ export class TramiteDetalle implements OnInit {
       this.cargando.set(false);
     }
   }
+  // ---- Firma electrónica ----
 
+  private async cargarFirma() {
+    const f = await firstValueFrom(this.api.getFirma(this.id()));
+
+    this.firma.set(f);
+
+    if (!f.request && !this.firmantes().length && f.suggested) {
+      this.firmantes.set([
+        { ...f.suggested, capacity: '' }
+      ]);
+    }
+  }
+
+  agregarFirmante() {
+    this.firmantes.update(l => [
+      ...l,
+      { name: '', run: '', email: '', capacity: '' }
+    ]);
+  }
+
+  quitarFirmante(i: number) {
+    this.firmantes.update(l => l.filter((_, j) => j !== i));
+  }
+
+  setFirmante(i: number, k: keyof Firmante, v: string) {
+    const valor = k === 'run' ? this.formatearRun(v) : v;
+
+    this.firmantes.update(l =>
+      l.map((f, j) => j === i ? { ...f, [k]: valor } : f)
+    );
+  }
+
+  private formatearRun(v: string) {
+    const limpio = v
+      .replace(/[^0-9kK]/g, '')
+      .toUpperCase()
+      .slice(0, 9);
+
+    return limpio.length <= 1
+      ? limpio
+      : limpio.slice(0, -1).replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+      + '-' + limpio.slice(-1);
+  }
+
+  firmantesCompletos = computed(() =>
+    this.firmantes().length > 0 &&
+    this.firmantes().every(f =>
+      f.name.trim() && f.run.trim() && f.email.trim()
+    )
+  );
+
+  iniciarFirma() {
+    return this.ejecutar(
+      () => firstValueFrom(
+        this.api.iniciarFirma(this.id(), this.firmantes())
+      ),
+      'Enviamos el enlace de firma a cada firmante.'
+    );
+  }
+
+  cancelarFirma() {
+    if (!confirm('¿Cancelar la solicitud de firma? Los enlaces enviados dejarán de funcionar.')) {
+      return;
+    }
+
+    return this.ejecutar(
+      () => firstValueFrom(this.api.cancelarFirma(this.id()))
+    );
+  }
+
+  bajarFirmado() {
+    return this.bajar(
+      `/tramites/${this.id()}/firma/documento`,
+      `${this.tramite()?.folio}-firmado.pdf`
+    );
+  }
   /** Ejecuta una acción con control de "ocupado", errores y recarga. */
   private async ejecutar(fn: () => Promise<unknown>, okMsg = '') {
     this.ocupado.set(true);
@@ -252,6 +355,10 @@ export class TramiteDetalle implements OnInit {
       this.ocupado.set(false);
     }
   }
+  hayFirmasRealizadas = computed(() =>
+    (this.firma()?.request?.signatories ?? [])
+      .some(f => f.status === 'firmado')
+  );
 
   // ---- Paso 1: pago ----
   irAlCarrito() { this.router.navigate(['/cliente/carrito']); }
@@ -267,9 +374,24 @@ export class TramiteDetalle implements OnInit {
   }
   defArticulo(key: string) { return this.plantillaSel()?.clauses.find(c => c.key === key); }
   private conDefectos(campos: CampoPlantilla[]) {
-    const defectos = Object.fromEntries(campos.filter(c => c.default).map(c => [c.key, c.default!]));
-    // Contratos con sucursal: se precargan los datos de la primera (hoy, La Florida).
-    return campos.some(c => c.key === 'sucursal_direccion') ? { ...defectos, ...SUCURSALES[0].valores } : defectos;
+    const defectos = Object.fromEntries(
+      campos.filter(c => c.default).map(c => [c.key, c.default!])
+    );
+
+    const base = campos.some(c => c.key === 'sucursal_direccion')
+      ? { ...defectos, ...SUCURSALES[0].valores }
+      : defectos;
+
+    const pre = this.tramite()?.prefill ?? {};
+
+    return {
+      ...base,
+      ...Object.fromEntries(
+        campos
+          .filter(c => pre[c.key])
+          .map(c => [c.key, pre[c.key]])
+      )
+    };
   }
 
   // ---- Sucursal: sus datos se completan solos y no se pueden editar ----
@@ -428,18 +550,18 @@ export class TramiteDetalle implements OnInit {
     return c.type === 'number' ? String(n) : `${n} ${n === 1 ? 'mes' : 'meses'}`;
   }
 
-    /** Avisa cuando las fechas no calzan con una duración permitida (la duración queda vacía). */
-    avisoPlazo = computed(() => {
-      const p = this.vinculoPlazo(), v = this.valores();
-      if (!p || v[p.meses]) return '';
-      const inicio = fechaIso(v[p.inicio] ?? ''), fin = fechaIso(v[p.fin] ?? '');
-      if (!inicio || !fin) return '';
-      const n = mesesEntre(inicio, fin);
-      if (n === null) return 'La fecha de término debe caer el mismo día del mes que la de inicio (por ejemplo, del 01/01 al 01/07).';
-      const opciones = this.campos().find(c => c.key === p.meses)?.options;
-      return opciones ? `Entre esas fechas hay ${n} meses, pero la duración solo puede ser de ${opciones.join(', ')} meses. Cambia la fecha de término o elige la duración.` : '';
-    });
-  
+  /** Avisa cuando las fechas no calzan con una duración permitida (la duración queda vacía). */
+  avisoPlazo = computed(() => {
+    const p = this.vinculoPlazo(), v = this.valores();
+    if (!p || v[p.meses]) return '';
+    const inicio = fechaIso(v[p.inicio] ?? ''), fin = fechaIso(v[p.fin] ?? '');
+    if (!inicio || !fin) return '';
+    const n = mesesEntre(inicio, fin);
+    if (n === null) return 'La fecha de término debe caer el mismo día del mes que la de inicio (por ejemplo, del 01/01 al 01/07).';
+    const opciones = this.campos().find(c => c.key === p.meses)?.options;
+    return opciones ? `Entre esas fechas hay ${n} meses, pero la duración solo puede ser de ${opciones.join(', ')} meses. Cambia la fecha de término o elige la duración.` : '';
+  });
+
 
 
 

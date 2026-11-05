@@ -1,8 +1,8 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Auth } from './auth';
-
-const API = 'http://localhost:3000/api';
+import { environment } from '../environments/environment';
+const API = environment.apiUrl;
 
 export type Agrupar = 'dia' | 'mes' | 'anio';
 export interface ResumenVentas { ingresos: number; ventas: number; compras: number; descuentos: number; ticketPromedio: number; }

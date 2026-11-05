@@ -33,21 +33,37 @@ export function pasosDe(requiereFirma: boolean): Paso[] {
   return pasos;
 }
 
-/** Índice del paso EN CURSO. Los anteriores se pintan como hechos. Si devuelve pasos.length, todo está hecho. */
 export function indiceActual(estado: string, requiereFirma: boolean): number {
-  const total = pasosDe(requiereFirma).length;
+  const pasos = pasosDe(requiereFirma);
+  const indice = (clave: string) => pasos.findIndex(p => p.clave === clave);
+
   switch (estado) {
-    case 'borrador': return 0;
-    case 'pendiente_pago': return 1;
-    case 'en_redaccion': return 2; // corrigiendo tras una observación
+    case 'borrador':
+      return indice('redaccion');
+
+    case 'pendiente_pago':
+      return indice('pago');
+
+    case 'en_redaccion':
     case 'en_revision':
-    case 'observado': return 2;
-    case 'aprobado': return 4; // aprobado listo; sigue la firma (si aplica) o el cierre
-    case 'pendiente_firma': return 4;
-    case 'firmado': return 5;
+    case 'observado':
+      return indice('revision');
+
+    case 'aprobado':
+      return requiereFirma ? indice('firma') : indice('completado');
+
+    case 'pendiente_firma':
+      return indice('firma');
+
+    case 'firmado':
+      return indice('completado');
+
     case 'entregado':
-    case 'completado': return total;
-    default: return -1; // cancelado u otro
+    case 'completado':
+      return pasos.length;
+
+    default:
+      return -1;
   }
 }
 

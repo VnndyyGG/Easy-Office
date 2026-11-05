@@ -159,7 +159,7 @@ export class ComercialDashboard implements OnInit {
     return d >= 4 ? 'rechazado' : d >= 2 ? 'pendiente' : '';
   }
   /** 12345678-9 → 12.345.678-9 */
-  rutConPuntos(rut: string) {
+  runConPuntos(rut: string) {
     const [cuerpo, dv] = rut.split('-');
     return cuerpo.replace(/\B(?=(\d{3})+(?!\d))/g, '.') + (dv ? '-' + dv : '');
   }

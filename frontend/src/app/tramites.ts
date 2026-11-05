@@ -2,10 +2,8 @@ import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable, map } from 'rxjs';
 import { Auth } from './auth';
-
-
-
-const API = 'http://localhost:3000/api';
+import { environment } from '../environments/environment';
+const API = environment.apiUrl;
 
 // ---- Modelos (snake_case = como los devuelve el backend) ----
 export interface Tramite {
@@ -20,17 +18,25 @@ export interface Tramite {
 }
 export interface CaseRow {
   id: number; folio: string; service_name: string; title: string; details: string;
-  amount: number; requires_signature: number; status: string; created_at: string; updated_at: string;
+  amount: number; requires_signature: number; signature_level: 'ninguna' | 'simple' | 'avanzada'; status: string; created_at: string; updated_at: string;
 }
 export interface DocumentRow { id: number; version: number; content: string; created_at: string; }
 export interface AttachmentRow { id: number; name: string; sha256: string; created_at: string; }
-export interface CaseDetail extends CaseRow { template_id: number | null; documents: DocumentRow[]; attachments: AttachmentRow[]; }
-export interface Servicio { id: number; name: string; price: number; requires_signature: number; template_id: number | null; }
+export interface CaseDetail extends CaseRow { template_id: number | null; prefill: Record<string, string>; documents: DocumentRow[]; attachments: AttachmentRow[]; }
+export interface Servicio { id: number; name: string; price: number; requires_signature: number; signature_level: string; template_id: number | null; }
 
-export type TipoCampo = 'text' | 'textarea' | 'email' | 'number' | 'rut' | 'select';
+export type TipoCampo =
+  | 'text'
+  | 'textarea'
+  | 'email'
+  | 'number'
+  | 'run'
+  | 'rut'
+  | 'select';
+
 export interface CampoPlantilla {
   key: string; label: string; group?: string; type: TipoCampo; required: boolean;
-  placeholder?: string; default?: string; options?: string[];
+  placeholder?: string; default?: string; prefill?: string; options?: string[];
 }
 export interface ArticuloPlantilla { key: string; label: string; text: string; fields: CampoPlantilla[]; }
 export interface Plantilla {
@@ -41,12 +47,81 @@ export interface Plantilla {
 export interface ArticuloElegido { key: string; values: Record<string, string>; }
 export interface PlantillaRender { content: string; missing: string[]; complete: boolean; }
 export interface DireccionSugerida { direccion: string; lugares: string[]; etiqueta: string; }
-export interface ClienteResultado { id: number; name: string; email: string; rut: string; }
+export interface ClienteResultado { id: number; name: string; email: string; run: string; }
 export interface CaseResumen { id: number; folio: string; service_name: string; title: string; status: string; assigned_id: number | null; created_at: string; }
 export interface Pago { id: number; case_id: number; order_id: number | null; amount: number; method: string; reference: string; status: 'pendiente' | 'aprobado' | 'rechazado'; reason: string | null; }
 export interface Notificacion { id: number; case_id: number | null; message: string; created_at: string; }
-export interface Capabilities { payments: { webpay: boolean }; firmaElectronicaAvanzada: boolean; }
+export interface Capabilities {
+  payments: {
+    webpay: boolean;
+  };
+  firmaElectronicaSimple: boolean;
+  firmaElectronicaAvanzada: boolean;
+  privacidad: {
+    version: string;
+  };
+}
+export interface Firmante {
+  name: string;
+  run: string;
+  email: string;
+  capacity: string;
+}
 
+export interface FirmanteEstado {
+  id: number;
+  name: string;
+  run: string;
+  email: string;
+  capacity: string;
+  status: 'pendiente' | 'firmado' | 'rechazado';
+  signedAt: string | null;
+}
+
+export interface SolicitudFirma {
+  id: number;
+  status: 'pendiente' | 'completada' | 'cancelada' | 'expirada';
+  level: string;
+  documentSha256: string;
+  signedSha256: string | null;
+  expiresAt: string;
+  completedAt: string | null;
+  signatories: FirmanteEstado[];
+}
+
+export interface FirmaEstado {
+  requiresSignature: boolean;
+  level: string;
+  availableLevels: {
+    simple: boolean;
+    avanzada: boolean;
+  };
+  declaration: {
+    version: string;
+    text: string;
+  };
+  suggested: {
+    name: string;
+    run: string;
+    email: string;
+  } | null;
+  request: SolicitudFirma | null;
+}
+
+export interface SolicitudDatos {
+  id: number;
+  user_id: number;
+  type: string;
+  detail: string;
+  status: string;
+  created_at: string;
+  due_at: string;
+  extended: number;
+  resolved_at: string | null;
+  resolution: string | null;
+  user_name?: string;
+  user_email?: string;
+}
 // ---- Carrito, cupones y Webpay ----
 export interface CarritoItem { id: number; folio: string; title: string; service_name: string; amount: number; en_proceso: boolean; }
 export interface CotizacionItem { case_id: number; amount: number; paid_amount: number; folio: string; title: string; service_name: string; }
@@ -61,7 +136,7 @@ export interface Orden {
 
 @Injectable({ providedIn: 'root' })
 export class Tramites {
-  constructor(private http: HttpClient, private auth: Auth) {}
+  constructor(private http: HttpClient, private auth: Auth) { }
 
   private h() {
     return { headers: new HttpHeaders({ Authorization: `Bearer ${this.auth.token()}` }) };
@@ -88,7 +163,7 @@ export class Tramites {
   getPlantillas() {
     return this.http.get<{ items: Plantilla[]; categorias: { key: string; label: string; total: number }[] }>(`${API}/plantillas`, this.h());
   }
-  /** El backend valida (RUT, correo, opciones) y devuelve el documento final. No guarda nada. */
+  /** El backend valida (RUn, correo, opciones) y devuelve el documento final. No guarda nada. */
   renderPlantilla(id: number, body: { values: Record<string, string>; clauses: ArticuloElegido[] }) {
     return this.http.post<PlantillaRender>(`${API}/plantillas/${id}/render`, body, this.h());
   }
@@ -136,4 +211,53 @@ export class Tramites {
   descargar(ruta: string) {
     return this.http.get(`${API}${ruta}`, { ...this.h(), responseType: 'blob' });
   }
+
+    // ---- Firma electrónica ----
+
+  getFirma(id: number) {
+    return this.http.get<FirmaEstado>(
+      `${API}/tramites/${id}/firma`,
+      this.h()
+    );
+  }
+
+  iniciarFirma(id: number, signatories: Firmante[]) {
+    return this.http.post<SolicitudFirma>(
+      `${API}/tramites/${id}/firma`,
+      { signatories },
+      this.h()
+    );
+  }
+
+  cancelarFirma(id: number) {
+    return this.http.post(
+      `${API}/tramites/${id}/firma/cancelar`,
+      {},
+      this.h()
+    );
+  }
+
+  // ---- Privacidad y protección de datos ----
+
+  getSolicitudesDatos(todas = false) {
+    return this.http.get<{ items: SolicitudDatos[] }>(
+      `${API}/privacidad/solicitudes`,
+      {
+        ...this.h(),
+        params: todas ? { todas: '1' } : {}
+      }
+    );
+  }
+
+  crearSolicitudDatos(type: string, detail: string) {
+    return this.http.post<SolicitudDatos>(
+      `${API}/privacidad/solicitudes`,
+      { type, detail },
+      this.h()
+    );
+  }
+
+ resolverSolicitudDatos(id: number, body: { status?: string; resolution?: string; extend?: boolean; apply?: boolean }) {
+  return this.http.patch<SolicitudDatos>(`${API}/privacidad/solicitudes/${id}`, body, this.h());
+} 
 }
