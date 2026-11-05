@@ -1,6 +1,6 @@
 CONTRATO DE ARRENDAMIENTO DE VEHÍCULO
 
-En {{comuna}}, a {{fecha_contrato}}, comparecen: por una parte, Don/Doña {{propietario_nombre}}, RUT N.º {{propietario_rut}}, domiciliado/a en {{propietario_domicilio}}, en adelante el “Arrendador”; y por otra parte, {{razon_social}}, RUT N.º {{rut_empresa}}, representada legalmente por don/doña {{representante_nombre}}, RUT N.º {{representante_rut}}, domiciliada en {{empresa_domicilio}}, en adelante la “Arrendataria”. Las partes acuerdan celebrar el siguiente contrato de arrendamiento:
+En {{comuna}}, a {{fecha_contrato}}, comparecen: por una parte, Don/Doña {{propietario_nombre}}, RUN N.º {{propietario_rut}}, domiciliado/a en {{propietario_domicilio}}, en adelante el “Arrendador”; y por otra parte, {{razon_social}}, RUT N.º {{rut_empresa}}, representada legalmente por don/doña {{representante_nombre}}, RUN N.º {{representante_rut}}, domiciliada en {{empresa_domicilio}}, en adelante la “Arrendataria”. Las partes acuerdan celebrar el siguiente contrato de arrendamiento:
 
 PRIMERO: VEHÍCULO
 
@@ -54,11 +54,11 @@ En señal de aceptación, las partes firman el presente contrato en dos ejemplar
 EL ARRENDADOR
 ____________________________
 Nombre: {{propietario_nombre}}
-RUT: {{propietario_rut}}
+RUN: {{propietario_rut}}
 
 LA ARRENDATARIA
 ____________________________
 Razón Social: {{razon_social}}
 RUT: {{rut_empresa}}
 Representante: {{representante_nombre}}
-RUT representante: {{representante_rut}}
+RUN representante: {{representante_rut}}

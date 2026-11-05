@@ -33,13 +33,14 @@ const v = require('../src/validation');
         if (t.service) {
           const name = v.text(t.service.name, 'service.name', 120), price = v.integer(t.service.price, 'service.price', 1, 100000000);
           const signature = t.service.requiresSignature ? 1 : 0;
+          const level = !signature ? 'ninguna' : (t.service.signatureLevel === 'avanzada' ? 'avanzada' : 'simple');
           const svc = await db.one('SELECT id FROM services WHERE template_id=?', tplRow.id);
           if (!svc) { await db.run('INSERT INTO services(name,price,requires_signature,template_id) VALUES(?,?,?,?)', name, price, signature, tplRow.id); summary.servicios++; }
           else if (force) { await db.run('UPDATE services SET name=?,price=?,requires_signature=?,active=1 WHERE id=?', name, price, signature, svc.id); summary.servicios++; }
         }
       }
       // La plantilla genérica de demostración deja de aparecer junto a los contratos reales.
-             await db.run("UPDATE templates SET active=0 WHERE slug IS NULL AND name LIKE 'DEMO:%'");
+      await db.run("UPDATE templates SET active=0 WHERE slug IS NULL AND name LIKE 'DEMO:%'");
       // Igual con los servicios DEMO: se desactivan (no se borran: los trámites antiguos los referencian).
       await db.run("UPDATE services SET active=0 WHERE template_id IS NULL AND name LIKE 'DEMO:%'");
     });

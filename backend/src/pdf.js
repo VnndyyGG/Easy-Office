@@ -4,6 +4,10 @@ const PDFDocument = require('pdfkit');
 const path = require('node:path');
 const crypto = require('node:crypto');
 
+const NIVEL = { simple: 'Firma electrónica simple (Ley N.º 19.799, art. 2)', avanzada: 'Firma electrónica avanzada (Ley N.º 19.799, art. 2)' };
+const runConPuntos = run => { const [c, dv] = String(run || '').split('-'); return c ? `${c.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}-${dv}` : '—'; };
+
+
 const ASSETS = path.join(__dirname, '..', 'assets');
 const LOGO = path.join(ASSETS, 'logo.png');
 const FONTS = {
@@ -183,4 +187,57 @@ function comprobantePdf({ pago, orden }) {
   return done;
 }
 
-module.exports = { documentoPdf, comprobantePdf };
+function documentoFirmadoPdf({ folio, version, servicio, contenido, creadoEn, solicitudId, nivel, huellaDocumento, declaracion, firmantes }) {
+  const { doc, done } = nuevoPdf({ title: `${folio} · versión ${version} · firmado`, subject: servicio || 'Documento firmado electrónicamente' });
+  doc.y = MARGINS.top;
+  cuerpo(doc, String(contenido ?? ''));
+
+  doc.addPage();
+  const L = MARGINS.left, W = doc.page.width - L - MARGINS.right;
+  doc.y = MARGINS.top;
+  doc.font('serif-bold').fontSize(15).fillColor(COLOR.ink).text('CONSTANCIA DE FIRMA ELECTRÓNICA', { align: 'center', characterSpacing: 0.6 });
+  doc.moveDown(0.8);
+  const fila = (k, val) => {
+    const y = doc.y;
+    doc.font('Helvetica').fontSize(8.5).fillColor(COLOR.soft).text(k, L, y, { width: W * 0.28 });
+    doc.font('serif').fontSize(10.5).fillColor(COLOR.ink).text(String(val ?? '—'), L + W * 0.3, y - 1.5, { width: W * 0.7 });
+    doc.moveDown(0.35);
+  };
+  fila('Trámite', folio); fila('Documento', `${servicio || ''} · versión ${version}`);
+  fila('Tipo de firma', NIVEL[nivel] || nivel); fila('Solicitud de firma', `N.º ${solicitudId}`);
+  fila('Huella SHA-256 del texto firmado', huellaDocumento);
+  doc.moveDown(0.6);
+  doc.font('serif-bold').fontSize(11).fillColor(COLOR.green).text('Firmantes');
+  doc.moveTo(L, doc.y + 2).lineTo(L + W, doc.y + 2).lineWidth(0.8).strokeColor(COLOR.green).stroke();
+  doc.moveDown(0.6);
+  for (const f of firmantes) {
+    if (doc.y + 110 > doc.page.height - MARGINS.bottom) doc.addPage(), doc.y = MARGINS.top;
+    doc.font('serif-bold').fontSize(11).fillColor(COLOR.ink).text(f.nombre);
+    doc.moveDown(0.15);
+    fila('RUN', runConPuntos(f.run)); if (f.calidad) fila('Calidad', f.calidad);
+    fila('Correo verificado con código', f.correo);
+    fila('Firmó el', `${fechaCL(f.firmadoEn)} (hora de Chile) · ${f.firmadoEn}`);
+    fila('IP / navegador', `${f.ip || '—'} · ${String(f.navegador || '—').slice(0, 90)}`);
+    doc.moveDown(0.5);
+  }
+  if (doc.y + 120 > doc.page.height - MARGINS.bottom) doc.addPage(), doc.y = MARGINS.top;
+  doc.moveDown(0.4);
+  doc.font('Helvetica-Bold').fontSize(8.5).fillColor(COLOR.soft).text(`Declaración aceptada por cada firmante (versión ${declaracion.version})`);
+  doc.font('serif-italic').fontSize(10).fillColor(COLOR.ink).text(`“${declaracion.texto}”`, { align: 'justify' });
+  doc.moveDown(0.8);
+  doc.font('Helvetica').fontSize(8).fillColor(COLOR.soft).text(
+    'Cómo se identificó a cada firmante: enlace personal de un solo destinatario y código de 6 dígitos enviado a su correo, más el nombre escrito por la persona. ' +
+    'Es una firma electrónica simple: permite identificar al firmante al menos formalmente, pero no está certificada por un prestador acreditado. ' +
+    'Su valor probatorio es el que corresponda según las reglas generales (Ley N.º 19.799, art. 5). Para verificar que este PDF no fue alterado, compare su huella SHA-256 con la registrada en el portal.',
+    { align: 'justify', lineGap: 1.5 });
+
+  const huella = crypto.createHash('sha256').update(String(contenido ?? '')).digest('hex');
+  decorar(doc, {
+    derecha: [`Trámite ${folio} · Versión ${version}`, servicio || ''],
+    pie: `Firmado electrónicamente · Constancia generada el ${fechaCL(new Date())} · easyoffice.cl`,
+    huella: huella.slice(0, 32) + '…', borrador: false
+  });
+  doc.end();
+  return done;}
+
+module.exports = { documentoPdf, documentoFirmadoPdf, comprobantePdf };

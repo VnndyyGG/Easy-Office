@@ -59,9 +59,9 @@ DECIMONOVENO Las partes fijan como domicilio la ciudad y comuna en la que se enc
 EL ARRENDADOR
 ____________________________
 Nombre: {{arrendador_nombre}}
-RUT: {{arrendador_rut}}
+RUN: {{arrendador_rut}}
 
 EL ARRENDATARIO
 ____________________________
 Nombre: {{arrendatario_nombre}}
-RUT: {{arrendatario_rut}}
+RUN: {{arrendatario_rut}}

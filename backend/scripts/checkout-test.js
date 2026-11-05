@@ -36,9 +36,18 @@ test('carrito + cupón + Webpay (simulado)', { skip: !url && 'defina TEST_DATABA
   const pass = 'clave-de-prueba-123';
   await db.run("INSERT INTO users(name,email,password_hash,role,created_at) VALUES(?,?,?,'admin',?)", 'Admin T', `admin-${sufijo}@example.test`, await hashPassword(pass), new Date().toISOString());
   const admin = (await call('POST', '/api/auth/login', null, { email: `admin-${sufijo}@example.test`, password: pass })).json.token;
-  const cliente = (await call('POST', '/api/auth/register', null, { name: 'Cliente T', email: `cli-${sufijo}@example.test`, password: pass })).json.token;
-  const otro = (await call('POST', '/api/auth/register', null, { name: 'Otro T', email: `otro-${sufijo}@example.test`, password: pass })).json.token;
-  const svcA = (await call('POST', '/api/servicios', admin, { name: 'Servicio A', price: 15000, requiresSignature: false })).json.id;
+  const cliente = (await call('POST', '/api/auth/register', null, {
+    name: 'Cliente T',
+    email: `cli-${sufijo}@example.test`,
+    password: pass,
+    acceptPrivacy: true
+  })).json.token;
+  const otro = (await call('POST', '/api/auth/register', null, {
+    name: 'Otro T',
+    email: `otro-${sufijo}@example.test`,
+    password: pass,
+    acceptPrivacy: true
+  })).json.token; const svcA = (await call('POST', '/api/servicios', admin, { name: 'Servicio A', price: 15000, requiresSignature: false })).json.id;
   const svcB = (await call('POST', '/api/servicios', admin, { name: 'Servicio B', price: 22000, requiresSignature: false })).json.id;
   const code = `TEST${sufijo}`.toUpperCase();
   assert.equal((await call('POST', '/api/cupones', admin, { code, amount: 5000, maxUses: 5 })).status, 201);

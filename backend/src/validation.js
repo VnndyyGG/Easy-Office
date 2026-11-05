@@ -30,20 +30,23 @@ function bool(value, name) {
   if (typeof value !== 'boolean') fail(400, 'VALIDATION_ERROR', `${name}: booleano requerido.`);
   return value ? 1 : 0;
 }
-function rut(value = '') {
-  if (value === '') return '';
-  const normalized = text(value, 'rut', 15).replace(/[.\s-]/g, '').toUpperCase();
-  if (!/^\d{7,8}[0-9K]$/.test(normalized)) fail(400, 'VALIDATION_ERROR', 'RUT inválido.');
+function rolUnico(value, name, label, esPersona) {
+  const normalized = text(value, name, 15).replace(/[.\s-]/g, '').toUpperCase();
+  if (!/^\d{7,8}[0-9K]$/.test(normalized)) fail(400, 'VALIDATION_ERROR', `${label} inválido.`);
   const body = normalized.slice(0, -1);
   let sum = 0, factor = 2;
   for (const digit of [...body].reverse()) { sum += Number(digit) * factor; factor = factor === 7 ? 2 : factor + 1; }
   const remainder = 11 - sum % 11;
   if ((remainder === 11 ? '0' : remainder === 10 ? 'K' : String(remainder)) !== normalized.at(-1))
-    fail(400, 'VALIDATION_ERROR', 'Dígito verificador del RUT inválido.');
+    fail(400, 'VALIDATION_ERROR', `Dígito verificador del ${label} inválido.`);
+  if (esPersona && Number(body) >= 50000000) fail(400, 'VALIDATION_ERROR', `${label} inválido: ese número corresponde a una empresa (RUT), no a una persona.`);
   return `${body}-${normalized.at(-1)}`;
 }
+function run(value = '') { return value === '' ? '' : rolUnico(value, 'run', 'RUN', true); }
+function rut(value = '') { return value === '' ? '' : rolUnico(value, 'rut', 'RUT', false); }
+
 function pagination(query) {
   return { limit: query.limit === undefined ? 50 : integer(Number(query.limit), 'limit', 1, 100),
     offset: query.offset === undefined ? 0 : integer(Number(query.offset), 'offset', 0, 1000000) };
 }
-module.exports = { ApiError, fail, text, integer, id, email, password, bool, rut, pagination };
+module.exports = { ApiError, fail, text, integer, id, email, password, bool,run, rut, pagination };

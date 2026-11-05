@@ -9,11 +9,14 @@ const CATEGORIES = {
   poderes: 'Poderes y autorizaciones',
   general: 'General'
 };
-const FIELD_TYPES = ['text', 'textarea', 'email', 'number', 'rut', 'select'];
+
+const FIELD_TYPES = ['text', 'textarea', 'email', 'number', 'run', 'rut', 'select'];
+const PREFILL = { 'cliente.nombre': 'name', 'cliente.run': 'run', 'cliente.email': 'email' };
+const PREFILL_TYPES = { 'cliente.nombre': ['text'], 'cliente.run': ['run'], 'cliente.email': ['email'] };
+const MAX_VALUE = { text: 500, email: 254, number: 30, run: 15, rut: 15, select: 500, textarea: 5000 };
 const KEY = /^[a-z][a-z0-9_]{0,59}$/;
 const PLACEHOLDER = /\{\{([a-z][a-z0-9_]*)\}\}/g;
 const CLAUSES_TAG = 'clausulas';
-const MAX_VALUE = { text: 500, email: 254, number: 30, rut: 15, select: 500, textarea: 5000 };
 
 const category = value => {
   if (typeof value !== 'string' || !Object.hasOwn(CATEGORIES, value))
@@ -42,10 +45,19 @@ function cleanFields(input, name = 'fields') {
     seen.add(raw.key);
     const type = raw.type === undefined ? 'text' : raw.type;
     if (!FIELD_TYPES.includes(type)) v.fail(400, 'VALIDATION_ERROR', `${name}[${i}].type: use ${FIELD_TYPES.join(', ')}.`);
-    const field = { key: raw.key, label: v.text(raw.label, `${name}[${i}].label`, 200), type,
-      required: raw.required === undefined ? true : (typeof raw.required === 'boolean' ? raw.required : v.fail(400, 'VALIDATION_ERROR', `${name}[${i}].required: booleano.`)) };
+    const field = {
+      key: raw.key, label: v.text(raw.label, `${name}[${i}].label`, 200), type,
+      required: raw.required === undefined ? true : (typeof raw.required === 'boolean' ? raw.required : v.fail(400, 'VALIDATION_ERROR', `${name}[${i}].required: booleano.`))
+    };
     if (raw.group !== undefined) field.group = v.text(raw.group, `${name}[${i}].group`, 80);
     if (raw.placeholder !== undefined) field.placeholder = v.text(raw.placeholder, `${name}[${i}].placeholder`, 300, 0);
+    if (raw.prefill !== undefined) {
+      if (typeof raw.prefill !== 'string' || !Object.hasOwn(PREFILL, raw.prefill))
+        v.fail(400, 'VALIDATION_ERROR', `${name}[${i}].prefill: use ${Object.keys(PREFILL).join(', ')}.`);
+      if (!PREFILL_TYPES[raw.prefill].includes(type))
+        v.fail(400, 'VALIDATION_ERROR', `${name}[${i}].prefill ${raw.prefill} solo aplica a campos de tipo ${PREFILL_TYPES[raw.prefill].join('/')}.`);
+      field.prefill = raw.prefill;
+    }
     if (raw.default !== undefined) field.default = v.text(raw.default, `${name}[${i}].default`, 500, 0);
     if (type === 'select') {
       if (!Array.isArray(raw.options) || !raw.options.length || raw.options.length > 50) v.fail(400, 'VALIDATION_ERROR', `${name}[${i}].options: 1 a 50 opciones.`);
@@ -82,17 +94,31 @@ function assertContent(content, fields, clauses) {
 }
 
 function present(row, withContent = false) {
-  const out = { id: row.id, slug: row.slug, name: row.name, category: row.category, categoryLabel: categoryLabel(row.category),
+  const out = {
+    id: row.id, slug: row.slug, name: row.name, category: row.category, categoryLabel: categoryLabel(row.category),
     description: row.description, version: row.version, active: row.active, updated_at: row.updated_at,
-    fields: parseList(row.fields), clauses: parseList(row.clauses) };
+    fields: parseList(row.fields), clauses: parseList(row.clauses)
+  };
   if (withContent) out.content = row.content;
   return out;
 }
 
-function formatRut(value) {
-  const clean = v.rut(value); // valida dígito verificador
+function formatRol(clean) {
   const [body, dv] = clean.split('-');
   return `${body.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}-${dv}`;
+}
+const formatRun = value => formatRol(v.run(value));
+const formatRut = value => formatRol(v.rut(value));
+
+function prefillValues(fields, client) {
+  const out = {};
+  for (const f of fields) {
+    if (!f.prefill || !client) continue;
+    const raw = client[PREFILL[f.prefill]];
+    if (!raw) continue;
+    out[f.key] = f.type === 'run' ? formatRol(raw) : raw;
+  }
+  return out;
 }
 
 function cleanValue(field, raw) {
@@ -108,6 +134,7 @@ function cleanValue(field, raw) {
   if (field.type === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) v.fail(400, 'VALIDATION_ERROR', `${name}: correo inválido.`);
   if (field.type === 'number' && !/^[0-9][0-9.,]*$/.test(value)) v.fail(400, 'VALIDATION_ERROR', `${name}: número inválido.`);
   if (field.type === 'select' && !field.options.includes(value)) v.fail(400, 'VALIDATION_ERROR', `${name}: valor fuera de las opciones.`);
+  if (field.type === 'run') return formatRun(value);
   if (field.type === 'rut') return formatRut(value);
   return value;
 }
@@ -147,4 +174,4 @@ function render(row, body = {}) {
   return { content, missing, complete: missing.length === 0 };
 }
 
-module.exports = { CATEGORIES, category, categoryLabel, slug, cleanFields, cleanClauses, assertContent, present, render, placeholders, parseList };
+module.exports = { PREFILL, prefillValues, CATEGORIES, category, categoryLabel, slug, cleanFields, cleanClauses, assertContent, present, render, placeholders, parseList };

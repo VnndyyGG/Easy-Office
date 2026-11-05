@@ -9,6 +9,10 @@ const { createMailer } = require('./mail');
 const { randomInt } = require('node:crypto');
 const now = () => new Date().toISOString();
 const ROLES = ['cliente', 'admin', 'comercial', 'finanzas'];
+const { createFirma } = require('./firma');
+const { createPrivacidad, VERSION: POLITICA_VERSION } = require('./privacidad');
+
+
 
 function createApp(db, options = {}) {
   const app = express();
@@ -76,9 +80,13 @@ function createApp(db, options = {}) {
     if (req.method === 'OPTIONS') return res.sendStatus(204);
     next();
   });
+
+  const firma = createFirma({ run, insert, one, all, atomic, audit, notify, roles, caseFor, changeState, mailer, frontendUrl, now, provider: options.signatureProvider });
+  const privacidad = createPrivacidad({ run, insert, one, all, atomic, audit, notify, roles, now });
+
   app.use(express.json({ limit: '3mb', strict: true }));
   app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
-  app.get('/api/capabilities', (req, res) => res.json({ payments: { webpay: webpay.enabled }, firmaElectronicaAvanzada: false, notifications: 'in_app', storage: 'postgresql' }));
+  app.get('/api/capabilities', (req, res) => res.json({ payments: { webpay: webpay.enabled }, firmaElectronicaSimple: true, firmaElectronicaAvanzada: Boolean(options.signatureProvider?.enabled), privacidad: { version: POLITICA_VERSION }, notifications: 'in_app', storage: 'postgresql' }));
   const authLimit = async (req, res, next) => {
     // No confiar en X-Forwarded-For enviado por el cliente. Configurar proxy de confianza antes de desplegar.
     const key = digest(req.ip || 'unknown');
@@ -92,20 +100,85 @@ function createApp(db, options = {}) {
     await run('INSERT INTO login_attempts(key,count,reset_at) VALUES(?,1,?) ON CONFLICT(key) DO UPDATE SET count=login_attempts.count+1', key, time + 15 * 60 * 1000);
     next();
   };
+
   app.post('/api/auth/register', authLimit, async (req, res) => {
     const b = req.body || {};
-    const name = v.text(b.name, 'name', 120), email = v.email(b.email), rut = v.rut(b.rut);
+    // Validación de datos
+    const name = v.text(b.name, 'name', 120);
+    const email = v.email(b.email);
+    const runValue = v.run(b.run ?? b.rut);
+    // Validación de aceptación de privacidad
+    if (b.acceptPrivacy !== true) {
+      v.fail(
+        400,
+        'PRIVACY_REQUIRED',
+        'Debes leer y aceptar el aviso de privacidad para crear tu cuenta.'
+      );
+    }
+
     const hash = await hashPassword(v.password(b.password));
+
     const result = await atomic(async () => {
-      if (await one('SELECT id FROM users WHERE email=?', email)) v.fail(409, 'EMAIL_EXISTS', 'El correo ya está registrado.');
-      if (await one("SELECT id FROM users WHERE rut=? AND role='cliente'", rut)) v.fail(409, 'RUT_EXISTS', 'El RUT ya está registrado.');
-      const userId = await insert('INSERT INTO users(name,email,password_hash,rut,role,created_at) VALUES(?,?,?,?,?,?)', name, email, hash, rut, 'cliente', now());
-      const user = await one('SELECT * FROM users WHERE id=?', userId);
-      await audit(user.id, 'usuario.registro', 'usuario', user.id);
+
+      // Validar correo duplicado
+      if (await one('SELECT id FROM users WHERE email=?', email)) {
+        v.fail(409, 'EMAIL_EXISTS', 'El correo ya está registrado.');
+      }
+
+      // Validar RUN duplicado
+      if (
+        runValue &&
+        await one(
+          "SELECT id FROM users WHERE run=? AND role='cliente'",
+          runValue
+        )
+      ) {
+        v.fail(409, 'RUN_EXISTS', 'El RUN ya está registrado.');
+      }
+
+      // Crear usuario con información de privacidad
+      const userId = await insert(
+        `INSERT INTO users(
+                name,
+                email,
+                password_hash,
+                run,
+                role,
+                created_at,
+                privacy_version,
+                privacy_accepted_at
+            ) VALUES(?,?,?,?,?,?,?,?)`,
+        name,
+        email,
+        hash,
+        runValue,
+        'cliente',
+        now(),
+        POLITICA_VERSION,
+        now()
+      );
+
+      // Obtener usuario creado
+      const user = await one(
+        'SELECT * FROM users WHERE id=?',
+        userId
+      );
+
+      // Registrar auditoría
+      await audit(
+        user.id,
+        'usuario.registro',
+        'usuario',
+        user.id,
+        { privacyVersion: POLITICA_VERSION }
+      );
+
       return issueSession(user);
     });
+
     res.status(201).json(result);
   });
+
   app.post('/api/auth/login', authLimit, async (req, res) => {
     const b = req.body || {};
     if (typeof b.password !== 'string' || b.password.length > 128) v.fail(400, 'VALIDATION_ERROR', 'Contraseña inválida.');
@@ -115,8 +188,8 @@ function createApp(db, options = {}) {
     if (usuario.includes('@')) {
       user = await one('SELECT * FROM users WHERE email=?', v.email(usuario));
     } else {
-      const rut = v.rut(usuario || 'x');   // valida el dígito verificador y lo deja como 12345678-9
-      const encontrados = await all("SELECT * FROM users WHERE rut=? AND role='cliente' LIMIT 2", rut);
+      const runValue = v.run(usuario || 'x');
+      const encontrados = await all("SELECT * FROM users WHERE run=? AND role='cliente' LIMIT 2", runValue);
       user = encontrados.length === 1 ? encontrados[0] : undefined;   // RUT repetido: no se adivina la cuenta, debe usar su correo
     }
 
@@ -129,56 +202,58 @@ function createApp(db, options = {}) {
     const result = await atomic(async () => { await audit(user.id, 'auth.login', 'usuario', user.id); return issueSession(current); });
     res.json(result);
   });
-    // ---- Recuperar contraseña: 1) pedir código por correo, 2) validarlo y elegir una nueva ----
-    const CODIGO_MINUTOS = 15, CODIGO_INTENTOS = 5;
-    app.post('/api/auth/recuperar', authLimit, async (req, res) => {
-      const email = v.email((req.body || {}).email);
-      const user = await one('SELECT * FROM users WHERE email=? AND active=1', email);
-      if (user) {
-        const code = String(randomInt(0, 1000000)).padStart(6, '0');   // 6 dígitos al azar, con ceros a la izquierda
-        const codeHash = await hashPassword(code);   // se guarda encriptado, igual que una contraseña
-        await atomic(async () => {
-          await run('DELETE FROM password_resets WHERE user_id=?', user.id);   // solo vale el último código pedido
-          await insert('INSERT INTO password_resets(user_id,code_hash,attempts,expires_at,created_at) VALUES(?,?,0,?,?)',
-            user.id, codeHash, Date.now() + CODIGO_MINUTOS * 60 * 1000, now());
-          await audit(user.id, 'auth.recuperacion', 'usuario', user.id);
-        });
-        // Sin await: la respuesta tarda lo mismo exista o no el correo (no revela quién tiene cuenta).
-        mailer.send({
-          to: user.email,
-          subject: `Tu código para recuperar la contraseña: ${code}`,
-          text: `Hola ${user.name}:\n\nTu código para crear una nueva contraseña en Easy Office es: ${code}\n\nVence en ${CODIGO_MINUTOS} minutos. Si no lo pediste, ignora este correo: tu contraseña no cambia.`,
-          html: `<p>Hola ${user.name.replace(/[<>&]/g, '')}:</p><p>Tu código para crear una nueva contraseña en Easy Office es:</p>
+  // ---- Recuperar contraseña: 1) pedir código por correo, 2) validarlo y elegir una nueva ----
+  const CODIGO_MINUTOS = 15, CODIGO_INTENTOS = 5;
+  app.post('/api/auth/recuperar', authLimit, async (req, res) => {
+    const email = v.email((req.body || {}).email);
+    const user = await one('SELECT * FROM users WHERE email=? AND active=1', email);
+    if (user) {
+      const code = String(randomInt(0, 1000000)).padStart(6, '0');   // 6 dígitos al azar, con ceros a la izquierda
+      const codeHash = await hashPassword(code);   // se guarda encriptado, igual que una contraseña
+      await atomic(async () => {
+        await run('DELETE FROM password_resets WHERE user_id=?', user.id);   // solo vale el último código pedido
+        await insert('INSERT INTO password_resets(user_id,code_hash,attempts,expires_at,created_at) VALUES(?,?,0,?,?)',
+          user.id, codeHash, Date.now() + CODIGO_MINUTOS * 60 * 1000, now());
+        await audit(user.id, 'auth.recuperacion', 'usuario', user.id);
+      });
+      // Sin await: la respuesta tarda lo mismo exista o no el correo (no revela quién tiene cuenta).
+      mailer.send({
+        to: user.email,
+        subject: `Tu código para recuperar la contraseña: ${code}`,
+        text: `Hola ${user.name}:\n\nTu código para crear una nueva contraseña en Easy Office es: ${code}\n\nVence en ${CODIGO_MINUTOS} minutos. Si no lo pediste, ignora este correo: tu contraseña no cambia.`,
+        html: `<p>Hola ${user.name.replace(/[<>&]/g, '')}:</p><p>Tu código para crear una nueva contraseña en Easy Office es:</p>
             <p style="font-size:28px;font-weight:700;letter-spacing:6px">${code}</p>
             <p>Vence en ${CODIGO_MINUTOS} minutos. Si no lo pediste, ignora este correo: tu contraseña no cambia.</p>`,
-        }).catch(e => console.error('No se pudo enviar el correo de recuperación:', e.message));
-      }
-      res.json({ message: 'Si el correo está registrado, te enviamos un código.' });
+      }).catch(e => console.error('No se pudo enviar el correo de recuperación:', e.message));
+    }
+    res.json({ message: 'Si el correo está registrado, te enviamos un código.' });
+  });
+  app.post('/api/auth/restablecer', authLimit, async (req, res) => {
+    const b = req.body || {};
+    const email = v.email(b.email), password = v.password(b.password);
+    const code = typeof b.code === 'string' ? b.code.trim() : '';
+    const invalido = () => v.fail(400, 'INVALID_CODE', 'El código no es válido o ya venció. Pide uno nuevo.');
+    if (!/^\d{6}$/.test(code)) invalido();
+    const user = await one('SELECT * FROM users WHERE email=? AND active=1', email);
+    const reset = user && await one('SELECT * FROM password_resets WHERE user_id=?', user.id);
+    if (!reset || reset.expires_at < Date.now() || reset.attempts >= CODIGO_INTENTOS) invalido();
+    if (!await verifyPassword(code, reset.code_hash)) {
+      await run('UPDATE password_resets SET attempts=attempts+1 WHERE id=?', reset.id);
+      invalido();
+    }
+    const hash = await hashPassword(password);
+    await atomic(async () => {
+      // Se borra el código al usarlo: si llegan dos solicitudes a la vez, solo una lo encuentra.
+      if (!(await run('DELETE FROM password_resets WHERE id=?', reset.id)).changes) invalido();
+      await run('UPDATE users SET password_hash=? WHERE id=?', hash, user.id);
+      await run('DELETE FROM sessions WHERE user_id=?', user.id);   // cierra las sesiones abiertas en otros equipos
+      await audit(user.id, 'auth.password_restablecida', 'usuario', user.id);
     });
-    app.post('/api/auth/restablecer', authLimit, async (req, res) => {
-      const b = req.body || {};
-      const email = v.email(b.email), password = v.password(b.password);
-      const code = typeof b.code === 'string' ? b.code.trim() : '';
-      const invalido = () => v.fail(400, 'INVALID_CODE', 'El código no es válido o ya venció. Pide uno nuevo.');
-      if (!/^\d{6}$/.test(code)) invalido();
-      const user = await one('SELECT * FROM users WHERE email=? AND active=1', email);
-      const reset = user && await one('SELECT * FROM password_resets WHERE user_id=?', user.id);
-      if (!reset || reset.expires_at < Date.now() || reset.attempts >= CODIGO_INTENTOS) invalido();
-      if (!await verifyPassword(code, reset.code_hash)) {
-        await run('UPDATE password_resets SET attempts=attempts+1 WHERE id=?', reset.id);
-        invalido();
-      }
-      const hash = await hashPassword(password);
-      await atomic(async () => {
-        // Se borra el código al usarlo: si llegan dos solicitudes a la vez, solo una lo encuentra.
-        if (!(await run('DELETE FROM password_resets WHERE id=?', reset.id)).changes) invalido();
-        await run('UPDATE users SET password_hash=? WHERE id=?', hash, user.id);
-        await run('DELETE FROM sessions WHERE user_id=?', user.id);   // cierra las sesiones abiertas en otros equipos
-        await audit(user.id, 'auth.password_restablecida', 'usuario', user.id);
-      });
-      res.json({ message: 'Contraseña actualizada. Ya puedes iniciar sesión.' });
-    });  
+    res.json({ message: 'Contraseña actualizada. Ya puedes iniciar sesión.' });
+  });
   checkout.mountPublic(app);
+  firma.mountPublic(app);
+  privacidad.mountPublic(app);
   app.use('/api', async (req, res, next) => {
     const match = /^Bearer ([a-f0-9]{64})$/.exec(req.get('Authorization') || '');
     if (!match) return next(new v.ApiError(401, 'UNAUTHENTICATED', 'Inicia sesión.'));
@@ -211,7 +286,7 @@ function createApp(db, options = {}) {
   });
   app.post('/api/usuarios', roles('admin'), async (req, res) => {
     const b = req.body || {};
-    const name = v.text(b.name, 'name', 120), email = v.email(b.email), rut = v.rut(b.rut);
+    const name = v.text(b.name, 'name', 120), email = v.email(b.email), runValue = v.run(b.run ?? b.rut);
     if (!ROLES.includes(b.tipo)) v.fail(400, 'VALIDATION_ERROR', 'Rol inválido.');
     const hash = await hashPassword(v.password(b.password));
     const result = await atomic(async () => {
@@ -225,23 +300,134 @@ function createApp(db, options = {}) {
     });
     res.status(201).json(result);
   });
+
   app.patch('/api/usuarios/:id', roles('admin'), async (req, res) => {
-    const userId = v.id(req.params.id), b = req.body || {};
+    const userId = v.id(req.params.id);
+    const b = req.body || {};
     const user = await one('SELECT * FROM users WHERE id=?', userId);
-    if (!user) v.fail(404, 'NOT_FOUND', 'Usuario no encontrado.');
-    const active = b.active === undefined ? user.active : v.bool(b.active, 'active');
-    const name = b.name === undefined ? user.name : v.text(b.name, 'name', 120);
-    const role = b.tipo === undefined ? user.role : b.tipo;
-    if (!ROLES.includes(role)) v.fail(400, 'VALIDATION_ERROR', 'Rol inválido.');
-    if (userId === req.user.id && (!active || role !== 'admin')) v.fail(409, 'SELF_CHANGE', 'No puedes desactivar tu propio acceso administrativo.');
-    if (role !== user.role && await one('SELECT id FROM cases WHERE client_id=? OR assigned_id=? LIMIT 1', userId, userId)) v.fail(409, 'ROLE_IN_USE', 'Este usuario tiene trámites asociados; conserva su rol.');
-    if (!active && await one("SELECT id FROM cases WHERE assigned_id=? AND status NOT IN ('completado','entregado','cancelado') LIMIT 1", userId)) v.fail(409, 'ASSIGNED_CASES', 'Reasigna sus trámites activos antes de desactivarlo.');
+    if (!user) {
+      v.fail(404, 'NOT_FOUND', 'Usuario no encontrado.');
+    }
+    const active = b.active === undefined
+      ? user.active
+      : v.bool(b.active, 'active');
+    const name = b.name === undefined
+      ? user.name
+      : v.text(b.name, 'name', 120);
+    const role = b.tipo === undefined
+      ? user.role
+      : b.tipo;
+    // Rectificación de RUN y correo
+    const runValue = b.run === undefined
+      ? user.run
+      : v.run(b.run);
+    const email = b.email === undefined
+      ? user.email
+      : v.email(b.email);
+    if (!ROLES.includes(role)) {
+      v.fail(400, 'VALIDATION_ERROR', 'Rol inválido.');
+    }
+    // Evitar duplicidad de correo
+    if (
+      email !== user.email &&
+      await one(
+        'SELECT id FROM users WHERE email=? AND id<>?',
+        email,
+        userId
+      )
+    ) {
+      v.fail(409, 'EMAIL_EXISTS', 'El correo ya está registrado.');
+    }
+    // Evitar duplicidad de RUN entre clientes
+    if (
+      runValue &&
+      runValue !== user.run &&
+      user.role === 'cliente' &&
+      await one(
+        "SELECT id FROM users WHERE run=? AND role='cliente' AND id<>?",
+        runValue,
+        userId
+      )
+    ) {
+      v.fail(409, 'RUN_EXISTS', 'El RUN ya está registrado.');
+    }
+    // Validaciones de seguridad
+    if (
+      userId === req.user.id &&
+      (!active || role !== 'admin')
+    ) {
+      v.fail(
+        409,
+        'SELF_CHANGE',
+        'No puedes desactivar tu propio acceso administrativo.'
+      );
+    }
+    if (
+      role !== user.role &&
+      await one(
+        'SELECT id FROM cases WHERE client_id=? OR assigned_id=? LIMIT 1',
+        userId,
+        userId
+      )
+    ) {
+      v.fail(
+        409,
+        'ROLE_IN_USE',
+        'Este usuario tiene trámites asociados; conserva su rol.'
+      );
+    }
+    if (
+      !active &&
+      await one(
+        "SELECT id FROM cases WHERE assigned_id=? AND status NOT IN ('completado','entregado','cancelado') LIMIT 1",
+        userId
+      )
+    ) {
+      v.fail(
+        409,
+        'ASSIGNED_CASES',
+        'Reasigna sus trámites activos antes de desactivarlo.'
+      );
+    }
+    // Actualización atómica
     await atomic(async () => {
-      await run('UPDATE users SET name=?,role=?,active=? WHERE id=?', name, role, active, userId);
-      if (!active || role !== user.role) await run('DELETE FROM sessions WHERE user_id=?', userId);
-      await audit(req.user.id, 'usuario.actualizado', 'usuario', userId, { role, active });
+      await run(
+        'UPDATE users SET name=?,role=?,active=?,run=?,email=? WHERE id=?',
+        name,
+        role,
+        active,
+        runValue,
+        email,
+        userId
+      );
+      // Invalidar sesiones si cambian sus condiciones de acceso
+      if (
+        !active ||
+        role !== user.role ||
+        email !== user.email
+      ) {
+        await run(
+          'DELETE FROM sessions WHERE user_id=?',
+          userId
+        );
+      }
+      // Registrar auditoría
+      await audit(
+        req.user.id,
+        'usuario.actualizado',
+        'usuario',
+        userId,
+        {
+          role,
+          active,
+          camposRectificados: ['name', 'run', 'email']
+            .filter(k => b[k] !== undefined)
+        }
+      );
     });
-    res.json(profile(await one('SELECT * FROM users WHERE id=?', userId)));
+    res.json(
+      profile(await one('SELECT * FROM users WHERE id=?', userId))
+    );
   });
   // Autocompletado de direcciones con Photon (OpenStreetMap). Pasa por el backend para poder cambiar de proveedor sin tocar el frontend.
   const photonUrl = (process.env.PHOTON_URL || 'https://photon.komoot.io').replace(/\/$/, '');
@@ -264,26 +450,73 @@ function createApp(db, options = {}) {
       .map(p => {
         const direccion = [p.street || p.name, p.housenumber].filter(Boolean).join(' ');
         // La comuna puede venir como district (Gran Santiago) o city (regiones); el frontend elige la que calce con su lista.
-        return { direccion, lugares: [p.district, p.city, p.locality, p.county].filter(Boolean),
-          etiqueta: [direccion, p.district || p.city, p.state].filter(Boolean).join(', ') };
+        return {
+          direccion, lugares: [p.district, p.city, p.locality, p.county].filter(Boolean),
+          etiqueta: [direccion, p.district || p.city, p.state].filter(Boolean).join(', ')
+        };
       })
       .filter(x => !vistas.has(x.etiqueta) && vistas.add(x.etiqueta));
     res.json({ items });
   });
+
   app.get('/api/clientes', roles('admin', 'comercial'), async (req, res) => {
     const { limit, offset } = v.pagination(req.query);
+
     const q = v.text(req.query.q || '', 'q', 120, 0);
-    if (req.user.role === 'comercial' && q.length < 3) v.fail(400, 'VALIDATION_ERROR', 'Busca con al menos 3 caracteres.');
+
+    // El usuario comercial debe buscar con al menos 3 caracteres
+    if (req.user.role === 'comercial' && q.length < 3) {
+      v.fail(
+        400,
+        'VALIDATION_ERROR',
+        'Busca con al menos 3 caracteres.'
+      );
+    }
+
+    // Escapar caracteres especiales para LIKE
     const like = s => '%' + s.replace(/[\\%_]/g, '\\$&') + '%';
+
     const pattern = like(q);
-    // El RUT se guarda como 12345678-9: se compara sin puntos, espacios ni guion para aceptar "12.345.678-9" o "123456789".
-    const rutPattern = like(q.replace(/[.\s-]/g, ''));
-    const items = await all(`SELECT id,name,email,rut FROM users WHERE role='cliente'
-      AND (name ILIKE ? ESCAPE '\\' OR email ILIKE ? ESCAPE '\\' OR REPLACE(rut,'-','') ILIKE ? ESCAPE '\\')
-      ORDER BY id LIMIT ? OFFSET ?`, pattern, pattern, rutPattern, limit, offset);
-    await audit(req.user.id, 'cliente.busqueda', 'usuario', null, { query: q, count: items.length });
+
+    // Permitir búsquedas de RUN con o sin puntos, espacios o guion
+    const runPattern = like(q.replace(/[.\s-]/g, ''));
+
+    // Buscar clientes no bloqueados
+    const items = await all(
+      `SELECT id, name, email, run
+         FROM users
+         WHERE role = 'cliente'
+           AND (blocked_until IS NULL OR blocked_until < ?)
+           AND (
+                name ILIKE ? ESCAPE '\\'
+                OR email ILIKE ? ESCAPE '\\'
+                OR REPLACE(run, '-', '') ILIKE ? ESCAPE '\\'
+           )
+         ORDER BY id
+         LIMIT ? OFFSET ?`,
+      now(),
+      pattern,
+      pattern,
+      runPattern,
+      limit,
+      offset
+    );
+
+    // Auditoría sin almacenar el texto de búsqueda
+    await audit(
+      req.user.id,
+      'cliente.busqueda',
+      'usuario',
+      null,
+      {
+        queryLength: q.length,
+        count: items.length
+      }
+    );
+
     res.json({ items });
   });
+
   app.get('/api/clientes/:id/tramites', roles('admin', 'comercial'), async (req, res) => {
     const clientId = v.id(req.params.id), { limit, offset } = v.pagination(req.query);
     const items = await all('SELECT id,folio,service_name,title,status,assigned_id,created_at FROM cases WHERE client_id=? ORDER BY id DESC LIMIT ? OFFSET ?', clientId, limit, offset);
@@ -309,6 +542,12 @@ function createApp(db, options = {}) {
     await atomic(async () => { await run('UPDATE services SET name=?,price=?,active=?,requires_signature=? WHERE id=?', name, price, active, signature, serviceId); await audit(req.user.id, 'servicio.actualizado', 'servicio', serviceId); });
     res.json(await one('SELECT * FROM services WHERE id=?', serviceId));
   });
+  const nivelFirma = (value, requires) => {
+    if (!requires) return 'ninguna';
+    if (value === undefined || value === null) return 'avanzada';
+    if (!['simple', 'avanzada'].includes(value)) v.fail(400, 'VALIDATION_ERROR', 'signatureLevel: simple o avanzada.');
+    return value;
+  };
   const templateRow = async (req, id) => {
     const row = await one('SELECT * FROM templates WHERE id=?', id);
     if (!row || (!row.active && req.user.role !== 'admin')) v.fail(404, 'NOT_FOUND', 'Plantilla no encontrada.');
@@ -390,17 +629,56 @@ function createApp(db, options = {}) {
     });
     res.status(201).json(await one('SELECT * FROM cases WHERE id=?', caseId));
   });
+
   app.get('/api/tramites/:id', roles('admin', 'comercial', 'cliente'), async (req, res) => {
     const row = await caseFor(req);
+
     await audit(req.user.id, 'tramite.consulta', 'tramite', row.id);
-    const svc = await one('SELECT template_id FROM services WHERE id=?', row.service_id);
+
+    // Obtener plantilla asociada al servicio
+    const svc = await one(
+      'SELECT template_id FROM services WHERE id=?',
+      row.service_id
+    );
+
+    // Autocompletado con los datos del cliente del trámite
+    let prefill = {};
+
+    if (svc?.template_id) {
+      const t = await one(
+        'SELECT fields FROM templates WHERE id=?',
+        svc.template_id
+      );
+
+      const client = await one(
+        'SELECT name, run, email FROM users WHERE id=?',
+        row.client_id
+      );
+
+      if (t && client) {
+        prefill = tpl.prefillValues(
+          tpl.parseList(t.fields),
+          client
+        );
+      }
+    }
+
+    // Responder con los datos del trámite
     res.json({
       ...row,
       template_id: svc ? svc.template_id : null,
-      documents: await all('SELECT * FROM documents WHERE case_id=? ORDER BY version DESC', row.id),
-      attachments: await all('SELECT id,name,mime,sha256,created_at FROM attachments WHERE case_id=?', row.id)
+      prefill,
+      documents: await all(
+        'SELECT * FROM documents WHERE case_id=? ORDER BY version DESC',
+        row.id
+      ),
+      attachments: await all(
+        'SELECT id,name,mime,sha256,created_at FROM attachments WHERE case_id=?',
+        row.id
+      )
     });
   });
+
   app.patch('/api/tramites/:id/asignacion', roles('admin'), async (req, res) => {
     const row = await caseFor(req, true), assignedId = v.integer(req.body?.assignedId, 'assignedId');
     if (!await one("SELECT id FROM users WHERE id=? AND role='comercial' AND active=1", assignedId)) v.fail(400, 'INVALID_ASSIGNEE', 'Selecciona un ejecutivo comercial activo.');
@@ -411,30 +689,198 @@ function createApp(db, options = {}) {
     });
     res.json(await one('SELECT * FROM cases WHERE id=?', row.id));
   });
+
   app.patch('/api/tramites/:id/estado', roles('admin', 'comercial', 'cliente'), async (req, res) => {
-    const row = await caseFor(req, true), state = v.text(req.body?.status, 'status', 40);
+    const row = await caseFor(req, true);
+    const state = v.text(req.body?.status, 'status', 40);
     const reason = v.text(req.body?.reason || '', 'reason', 1000, 0);
-    const transitions = { borrador: ['pendiente_pago', 'cancelado'], pendiente_pago: ['borrador', 'cancelado'], en_redaccion: ['en_revision'], en_revision: ['observado', 'aprobado'], observado: ['en_redaccion', 'en_revision'], aprobado: ['completado'] };
-    if (!transitions[row.status]?.includes(state)) v.fail(409, 'INVALID_TRANSITION', 'Cambio de estado no permitido.');
-    if (req.user.role === 'cliente' && !['en_revision', 'en_redaccion', 'pendiente_pago', 'borrador', 'cancelado'].includes(state)) v.fail(403, 'FORBIDDEN', 'No puedes aprobar tu propio trámite.');
-    if (state === 'cancelado' && await one("SELECT id FROM payments WHERE case_id=? AND status IN ('pendiente','aprobado')", row.id)) v.fail(409, 'PAYMENT_EXISTS', 'Resuelve el pago pendiente antes de cancelar.');
-    if (['en_revision', 'pendiente_pago'].includes(state) && !await one('SELECT id FROM documents WHERE case_id=?', row.id)) v.fail(409, 'DOCUMENT_REQUIRED', 'Genera y guarda tu documento antes de continuar.');
-    if (state === 'borrador' && await one("SELECT id FROM payments WHERE case_id=? AND status IN ('pendiente','aprobado')", row.id)) v.fail(409, 'PAYMENT_EXISTS', 'Ya informaste un pago; no puedes volver a editar el documento.');
-    if (['borrador', 'cancelado'].includes(state)) {
-      if (await one("SELECT o.id FROM order_items i JOIN orders o ON o.id=i.order_id WHERE i.case_id=? AND o.status='procesando'", row.id)) v.fail(409, 'PAYMENT_IN_PROGRESS', 'Hay un pago Webpay en proceso para este trámite.');
-      // Un intento sin concluir se descarta: sin confirmación Webpay no cobra.
-      await run("UPDATE orders SET status='anulada', updated_at=? WHERE status='iniciada' AND id IN (SELECT order_id FROM order_items WHERE case_id=?)", now(), row.id);
+
+    // No permitir modificaciones de trámites cerrados
+    if (['cancelado', 'completado'].includes(row.status)) {
+      v.fail(
+        409,
+        'CASE_LOCKED',
+        'El trámite ya no admite modificaciones.'
+      );
     }
-    if (state === 'observado' && !reason) v.fail(400, 'REASON_REQUIRED', 'Indica las observaciones.');
-    if (state === 'completado' && row.requires_signature) v.fail(409, 'SIGNATURE_REQUIRED', 'Este trámite requiere firma electrónica verificada.');
+
+    // Estados exclusivos del proceso de firma electrónica
+    if (['pendiente_firma', 'firmado'].includes(state)) {
+      v.fail(
+        403,
+        'FORBIDDEN',
+        'Esos estados solo los cambia el proceso de firma electrónica.'
+      );
+    }
+
+    // El cliente no puede cerrar el trámite
+    if (
+      req.user.role === 'cliente' &&
+      ['entregado', 'completado'].includes(state)
+    ) {
+      v.fail(
+        403,
+        'FORBIDDEN',
+        'Solo el ejecutivo cierra el trámite.'
+      );
+    }
+
+    // Transiciones permitidas
+    const transitions = {
+      borrador: ['pendiente_pago', 'cancelado'],
+      pendiente_pago: ['borrador', 'cancelado'],
+      en_redaccion: ['en_revision'],
+      en_revision: ['observado', 'aprobado'],
+      observado: ['en_redaccion', 'en_revision'],
+      aprobado: ['completado'],
+      firmado: ['entregado', 'completado'],
+      entregado: ['completado']
+    };
+
+    if (!transitions[row.status]?.includes(state)) {
+      v.fail(
+        409,
+        'INVALID_TRANSITION',
+        'Cambio de estado no permitido.'
+      );
+    }
+
+    // Restricciones para clientes
+    if (
+      req.user.role === 'cliente' &&
+      !['en_revision', 'en_redaccion', 'pendiente_pago', 'borrador', 'cancelado'].includes(state)
+    ) {
+      v.fail(
+        403,
+        'FORBIDDEN',
+        'No puedes aprobar tu propio trámite.'
+      );
+    }
+
+    // Validar pagos antes de cancelar
+    if (
+      state === 'cancelado' &&
+      await one(
+        "SELECT id FROM payments WHERE case_id=? AND status IN ('pendiente','aprobado')",
+        row.id
+      )
+    ) {
+      v.fail(
+        409,
+        'PAYMENT_EXISTS',
+        'Resuelve el pago pendiente antes de cancelar.'
+      );
+    }
+
+    // Validar documentos
+    if (
+      ['en_revision', 'pendiente_pago'].includes(state) &&
+      !await one('SELECT id FROM documents WHERE case_id=?', row.id)
+    ) {
+      v.fail(
+        409,
+        'DOCUMENT_REQUIRED',
+        'Genera y guarda tu documento antes de continuar.'
+      );
+    }
+
+    // No permitir volver a borrador si ya existe un pago
+    if (
+      state === 'borrador' &&
+      await one(
+        "SELECT id FROM payments WHERE case_id=? AND status IN ('pendiente','aprobado')",
+        row.id
+      )
+    ) {
+      v.fail(
+        409,
+        'PAYMENT_EXISTS',
+        'Ya informaste un pago; no puedes volver a editar el documento.'
+      );
+    }
+
+    // Validar órdenes Webpay en proceso
+    if (['borrador', 'cancelado'].includes(state)) {
+      if (
+        await one(
+          "SELECT o.id FROM order_items i JOIN orders o ON o.id=i.order_id WHERE i.case_id=? AND o.status='procesando'",
+          row.id
+        )
+      ) {
+        v.fail(
+          409,
+          'PAYMENT_IN_PROGRESS',
+          'Hay un pago Webpay en proceso para este trámite.'
+        );
+      }
+    }
+
+    // Descartar intentos de pago sin concluir
+    if (['borrador', 'cancelado'].includes(state)) {
+      await run(
+        "UPDATE orders SET status='anulada', updated_at=? WHERE status='iniciada' AND id IN (SELECT order_id FROM order_items WHERE case_id=?)",
+        now(),
+        row.id
+      );
+    }
+
+    // Motivo obligatorio para observaciones
+    if (state === 'observado' && !reason) {
+      v.fail(
+        400,
+        'REASON_REQUIRED',
+        'Indica las observaciones.'
+      );
+    }
+
+    // Validar firma electrónica
+    if (
+      state === 'completado' &&
+      row.status === 'aprobado' &&
+      row.requires_signature
+    ) {
+      v.fail(
+        409,
+        'SIGNATURE_REQUIRED',
+        'Este trámite requiere firma electrónica antes de cerrarse.'
+      );
+    }
+
+    if (
+      state === 'completado' &&
+      row.requires_signature
+    ) {
+      v.fail(
+        409,
+        'SIGNATURE_REQUIRED',
+        'Este trámite requiere firma electrónica verificada.'
+      );
+    }
+
+    // Actualización atómica con bloqueo de fila
     await atomic(async () => {
-      // Bloquea la fila y confirma que nadie cambió el estado mientras se validaba.
-      const locked = await one('SELECT status FROM cases WHERE id=? FOR UPDATE', row.id);
-      if (locked.status !== row.status) v.fail(409, 'STATE_CHANGED', 'El trámite cambió. Vuelve a cargarlo.');
+
+      const locked = await one(
+        'SELECT status FROM cases WHERE id=? FOR UPDATE',
+        row.id
+      );
+
+      if (!locked || locked.status !== row.status) {
+        v.fail(
+          409,
+          'STATE_CHANGED',
+          'El trámite cambió. Vuelve a cargarlo.'
+        );
+      }
+
       await changeState(req, row, state, reason);
     });
-    res.json(await one('SELECT * FROM cases WHERE id=?', row.id));
+
+    res.json(
+      await one('SELECT * FROM cases WHERE id=?', row.id)
+    );
   });
+
   app.post('/api/tramites/:id/documentos', roles('admin', 'comercial', 'cliente'), async (req, res) => {
     const row = await caseFor(req, true), b = req.body || {};
     if (!['borrador', 'en_redaccion', 'observado'].includes(row.status)) v.fail(409, 'DOCUMENT_LOCKED', 'Solo se puede editar en borrador o con observaciones.');
@@ -481,10 +927,20 @@ function createApp(db, options = {}) {
   });
   app.post('/api/tramites/:id/firma', roles('admin', 'comercial'), async (req, res) => {
     const row = await caseFor(req, true);
-    if (row.status !== 'aprobado' || !row.requires_signature) v.fail(409, 'INVALID_STATE', 'Requiere un trámite aprobado con firma requerida.');
-    v.fail(503, 'SIGNATURE_NOT_CONFIGURED', 'Falta integrar el proveedor de firma electrónica avanzada. No se ha firmado ni enviado el documento.');
+
+    if (row.status !== 'aprobado' || !row.requires_signature) {
+      v.fail(409, 'INVALID_STATE', 'Requiere un trámite aprobado con firma requerida.');
+    }
+
+    v.fail(
+      503,
+      'SIGNATURE_NOT_CONFIGURED',
+      'Falta integrar el proveedor de firma electrónica avanzada. No se ha firmado ni enviado el documento.'
+    );
   });
-  checkout.mountPrivate(app); // carrito, cupones y órdenes Webpay (reemplaza el aviso de transferencia)
+  firma.mountPrivate(app);
+  privacidad.mountPrivate(app);
+  checkout.mountPrivate(app);
   app.get('/api/pagos', roles('admin', 'finanzas', 'cliente'), async (req, res) => {
     const { limit, offset } = v.pagination(req.query);
     const where = req.user.role === 'cliente' ? 'WHERE c.client_id=?' : '';
@@ -533,50 +989,52 @@ function createApp(db, options = {}) {
     await audit(req.user.id, 'reporte.finanzas', 'reporte', null, { month });
     res.json({ month, timezone: 'UTC', currency: 'CLP', ingresos: approved.total, pagosAprobados: approved.count, pagosRechazados: rejected.count, ticketPromedio: Math.round(approved.average) });
   });
-    // ---- Reporte de ventas para el panel de finanzas. Las fechas se agrupan en hora de Chile, no en UTC. ----
-    const AGRUPAR = { dia: 'YYYY-MM-DD', mes: 'YYYY-MM', anio: 'YYYY' };
-    const FECHA_CHILE = "((p.reviewed_at)::timestamptz AT TIME ZONE 'America/Santiago')";
-    const diaIso = d => d.toISOString().slice(0, 10);
-    app.get('/api/reportes/ventas', roles('admin', 'finanzas'), async (req, res) => {
-      const fecha = (x, nombre) => {
-        if (typeof x !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(x) || isNaN(Date.parse(x))) v.fail(400, 'VALIDATION_ERROR', `${nombre}: usa el formato AAAA-MM-DD.`);
-        return x;
-      };
-      const desde = fecha(req.query.desde, 'desde'), hasta = fecha(req.query.hasta, 'hasta');
-      if (desde > hasta) v.fail(400, 'VALIDATION_ERROR', 'La fecha "desde" debe ser anterior a "hasta".');
-      const formato = AGRUPAR[req.query.agrupar] || AGRUPAR.dia;   // solo valores de la lista: nunca se mete texto del usuario en el SQL
-      // Período anterior del mismo largo, para comparar (ej.: este mes vs. el mes pasado).
-      const dias = (Date.parse(hasta) - Date.parse(desde)) / 86400000 + 1;
-      const antesHasta = new Date(Date.parse(desde) - 86400000), antesDesde = new Date(antesHasta.getTime() - (dias - 1) * 86400000);
-      const enRango = `p.status='aprobado' AND ${FECHA_CHILE}::date BETWEEN ?::date AND ?::date`;
-      const resumen = async (d, h) => {
-        const r = await one(`SELECT COALESCE(SUM(p.amount),0) AS ingresos, COUNT(*) AS ventas, COUNT(DISTINCT COALESCE(p.order_id, -p.id)) AS compras
+  // ---- Reporte de ventas para el panel de finanzas. Las fechas se agrupan en hora de Chile, no en UTC. ----
+  const AGRUPAR = { dia: 'YYYY-MM-DD', mes: 'YYYY-MM', anio: 'YYYY' };
+  const FECHA_CHILE = "((p.reviewed_at)::timestamptz AT TIME ZONE 'America/Santiago')";
+  const diaIso = d => d.toISOString().slice(0, 10);
+  app.get('/api/reportes/ventas', roles('admin', 'finanzas'), async (req, res) => {
+    const fecha = (x, nombre) => {
+      if (typeof x !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(x) || isNaN(Date.parse(x))) v.fail(400, 'VALIDATION_ERROR', `${nombre}: usa el formato AAAA-MM-DD.`);
+      return x;
+    };
+    const desde = fecha(req.query.desde, 'desde'), hasta = fecha(req.query.hasta, 'hasta');
+    if (desde > hasta) v.fail(400, 'VALIDATION_ERROR', 'La fecha "desde" debe ser anterior a "hasta".');
+    const formato = AGRUPAR[req.query.agrupar] || AGRUPAR.dia;   // solo valores de la lista: nunca se mete texto del usuario en el SQL
+    // Período anterior del mismo largo, para comparar (ej.: este mes vs. el mes pasado).
+    const dias = (Date.parse(hasta) - Date.parse(desde)) / 86400000 + 1;
+    const antesHasta = new Date(Date.parse(desde) - 86400000), antesDesde = new Date(antesHasta.getTime() - (dias - 1) * 86400000);
+    const enRango = `p.status='aprobado' AND ${FECHA_CHILE}::date BETWEEN ?::date AND ?::date`;
+    const resumen = async (d, h) => {
+      const r = await one(`SELECT COALESCE(SUM(p.amount),0) AS ingresos, COUNT(*) AS ventas, COUNT(DISTINCT COALESCE(p.order_id, -p.id)) AS compras
           FROM payments p WHERE ${enRango}`, d, h);
-        const desc = await one(`SELECT COALESCE(SUM(o.discount),0) AS descuentos FROM orders o
+      const desc = await one(`SELECT COALESCE(SUM(o.discount),0) AS descuentos FROM orders o
           WHERE o.id IN (SELECT DISTINCT p.order_id FROM payments p WHERE ${enRango})`, d, h);
-        return { ingresos: r.ingresos, ventas: r.ventas, compras: r.compras, descuentos: desc.descuentos,
-          ticketPromedio: r.compras ? Math.round(r.ingresos / r.compras) : 0 };
+      return {
+        ingresos: r.ingresos, ventas: r.ventas, compras: r.compras, descuentos: desc.descuentos,
+        ticketPromedio: r.compras ? Math.round(r.ingresos / r.compras) : 0
       };
-      const rangoOrdenes = "(o.created_at::timestamptz AT TIME ZONE 'America/Santiago')::date BETWEEN ?::date AND ?::date";
-      const [actual, anterior, serie, servicios, mediosPago, fallidos, pagos] = await Promise.all([
-        resumen(desde, hasta),
-        resumen(diaIso(antesDesde), diaIso(antesHasta)),
-        all(`SELECT to_char(${FECHA_CHILE}, '${formato}') AS periodo, SUM(p.amount) AS ingresos, COUNT(*) AS ventas
+    };
+    const rangoOrdenes = "(o.created_at::timestamptz AT TIME ZONE 'America/Santiago')::date BETWEEN ?::date AND ?::date";
+    const [actual, anterior, serie, servicios, mediosPago, fallidos, pagos] = await Promise.all([
+      resumen(desde, hasta),
+      resumen(diaIso(antesDesde), diaIso(antesHasta)),
+      all(`SELECT to_char(${FECHA_CHILE}, '${formato}') AS periodo, SUM(p.amount) AS ingresos, COUNT(*) AS ventas
           FROM payments p WHERE ${enRango} GROUP BY 1 ORDER BY 1`, desde, hasta),
-        all(`SELECT c.service_name AS servicio, COUNT(*) AS ventas, SUM(p.amount) AS ingresos
+      all(`SELECT c.service_name AS servicio, COUNT(*) AS ventas, SUM(p.amount) AS ingresos
           FROM payments p JOIN cases c ON c.id=p.case_id WHERE ${enRango} GROUP BY c.service_name ORDER BY ingresos DESC`, desde, hasta),
-        all(`SELECT COALESCE(o.payment_type, 'transferencia') AS tipo, COUNT(DISTINCT COALESCE(o.id, -p.id)) AS compras, SUM(p.amount) AS ingresos
+      all(`SELECT COALESCE(o.payment_type, 'transferencia') AS tipo, COUNT(DISTINCT COALESCE(o.id, -p.id)) AS compras, SUM(p.amount) AS ingresos
           FROM payments p LEFT JOIN orders o ON o.id=p.order_id WHERE ${enRango} GROUP BY 1 ORDER BY ingresos DESC`, desde, hasta),
-        one(`SELECT COUNT(*) AS ordenes, COALESCE(SUM(o.total),0) AS total FROM orders o
+      one(`SELECT COUNT(*) AS ordenes, COALESCE(SUM(o.total),0) AS total FROM orders o
           WHERE o.status IN ('rechazada','anulada','expirada') AND ${rangoOrdenes}`, desde, hasta),
-        all(`SELECT p.id, to_char(${FECHA_CHILE}, 'YYYY-MM-DD HH24:MI') AS fecha, c.folio, u.name AS cliente, c.service_name AS servicio, p.amount AS monto,
+      all(`SELECT p.id, to_char(${FECHA_CHILE}, 'YYYY-MM-DD HH24:MI') AS fecha, c.folio, u.name AS cliente, c.service_name AS servicio, p.amount AS monto,
             o.coupon_code AS cupon, o.payment_type AS tipo, o.card_last4 AS tarjeta, o.installments AS cuotas
           FROM payments p JOIN cases c ON c.id=p.case_id JOIN users u ON u.id=c.client_id LEFT JOIN orders o ON o.id=p.order_id
           WHERE ${enRango} ORDER BY p.reviewed_at DESC LIMIT 1000`, desde, hasta),
-      ]);
-      await audit(req.user.id, 'reporte.ventas', 'reporte', null, { desde, hasta });
-      res.json({ desde, hasta, zonaHoraria: 'America/Santiago', actual, anterior, serie, servicios, mediosPago, fallidos, pagos });
-    });  
+    ]);
+    await audit(req.user.id, 'reporte.ventas', 'reporte', null, { desde, hasta });
+    res.json({ desde, hasta, zonaHoraria: 'America/Santiago', actual, anterior, serie, servicios, mediosPago, fallidos, pagos });
+  });
   app.get('/api/indicadores', roles('admin'), async (req, res) => {
     res.json({
       tramitesPorEstado: await all('SELECT status,COUNT(*) AS total FROM cases GROUP BY status'),
