@@ -56,21 +56,24 @@
           "label": "Razón social",
           "group": "Empresa cliente",
           "type": "text",
-          "required": true
+          "required": true,
+          "prefill": "cliente.razon_social"
         },
         {
           "key": "rut_empresa",
           "label": "RUT empresa",
           "group": "Empresa cliente",
           "type": "rut",
-          "required": true
+          "required": true,
+          "prefill": "cliente.rut_empresa"
         },
         {
           "key": "giro",
           "label": "Giro principal",
           "group": "Empresa cliente",
           "type": "text",
-          "required": true
+          "required": true,
+          "prefill": "cliente.giro"
         },
         {
           "key": "representante_nombre",
@@ -93,21 +96,24 @@
           "label": "Domicilio del representante",
           "group": "Representante legal",
           "type": "text",
-          "required": true
+          "required": true,
+          "prefill": "cliente.domicilio"
         },
         {
           "key": "representante_comuna",
           "label": "Comuna del representante",
           "group": "Representante legal",
           "type": "text",
-          "required": true
+          "required": true,
+          "prefill": "cliente.comuna"
         },
         {
           "key": "representante_region",
           "label": "Región del representante",
           "group": "Representante legal",
           "type": "text",
-          "required": true
+          "required": true,
+          "prefill": "cliente.region"
         },
         {
           "key": "fecha_escritura",
@@ -139,7 +145,8 @@
           "group": "Contacto del cliente",
           "type": "text",
           "required": true,
-          "placeholder": "982527023"
+          "placeholder": "982527023",
+          "prefill": "cliente.celular"
         },
         {
           "key": "servicios_nombres",
@@ -276,21 +283,24 @@
           "label": "Razón social",
           "group": "Empresa cliente",
           "type": "text",
-          "required": true
+          "required": true,
+          "prefill": "cliente.razon_social"
         },
         {
           "key": "rut_empresa",
           "label": "RUT empresa",
           "group": "Empresa cliente",
           "type": "rut",
-          "required": true
+          "required": true,
+          "prefill": "cliente.rut_empresa"
         },
         {
           "key": "giro",
           "label": "Giro principal",
           "group": "Empresa cliente",
           "type": "text",
-          "required": true
+          "required": true,
+          "prefill": "cliente.giro"
         },
         {
           "key": "representante_nombre",
@@ -313,21 +323,24 @@
           "label": "Domicilio del representante",
           "group": "Representante legal",
           "type": "text",
-          "required": true
+          "required": true,
+          "prefill": "cliente.domicilio"
         },
         {
           "key": "representante_comuna",
           "label": "Comuna del representante",
           "group": "Representante legal",
           "type": "text",
-          "required": true
+          "required": true,
+          "prefill": "cliente.comuna"
         },
         {
           "key": "representante_region",
           "label": "Región del representante",
           "group": "Representante legal",
           "type": "text",
-          "required": true
+          "required": true,
+          "prefill": "cliente.region"
         },
         {
           "key": "fecha_escritura",
@@ -359,7 +372,8 @@
           "group": "Contacto del cliente",
           "type": "text",
           "required": true,
-          "placeholder": "982527023"
+          "placeholder": "982527023",
+          "prefill": "cliente.celular"
         },
         {
           "key": "servicios_nombres",
@@ -505,14 +519,16 @@
           "label": "Razón social de la empresa",
           "group": "Arrendataria",
           "type": "text",
-          "required": true
+          "required": true,
+          "prefill": "cliente.razon_social"
         },
         {
           "key": "rut_empresa",
           "label": "RUT empresa",
           "group": "Arrendataria",
           "type": "rut",
-          "required": true
+          "required": true,
+          "prefill": "cliente.rut_empresa"
         },
         {
           "key": "representante_nombre",
@@ -535,7 +551,8 @@
           "label": "Domicilio de la empresa",
           "group": "Arrendataria",
           "type": "text",
-          "required": true
+          "required": true,
+          "prefill": "cliente.empresa_domicilio"
         },
         {
           "key": "marca",

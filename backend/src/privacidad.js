@@ -22,13 +22,14 @@ function createPrivacidad({ run, insert, one, all, atomic, audit, notify, roles,
       v.fail(409, 'OPEN_CASES', 'El cliente tiene trámites en curso. Ciérralos o cancélalos antes de suprimir sus datos.');
     if (await one("SELECT id FROM orders WHERE client_id=? AND status IN ('iniciada','procesando') LIMIT 1", userId))
       v.fail(409, 'OPEN_ORDERS', 'Hay un pago en curso.');
-    await run("UPDATE users SET name='Titular eliminado', email=?, run='', password_hash=?, active=0, blocked_until=NULL WHERE id=?",
+    await run(`UPDATE users SET name='Titular eliminado', email=?, run='', password_hash=?, active=0, blocked_until=NULL,
+      phone='', address='', comuna='', region='', company_name='', company_rut='', company_giro='', company_address='' WHERE id=?`,
       `eliminado-${userId}@anonimo.invalid`, '!' + randomBytes(16).toString('hex'), userId);
     await run('DELETE FROM sessions WHERE user_id=?', userId);
     await run('DELETE FROM password_resets WHERE user_id=?', userId);
     await run('DELETE FROM notifications WHERE user_id=?', userId);
     return {
-      anonimizado: ['nombre', 'correo', 'RUN', 'contraseña', 'sesiones', 'notificaciones'],
+      anonimizado: ['nombre', 'correo', 'RUN', 'contraseña', 'teléfono', 'domicilio', 'datos de empresa', 'sesiones', 'notificaciones'],
       conservado: ['trámites, documentos y adjuntos ya cerrados', 'pagos y órdenes', 'evidencia de firma electrónica', 'registro de auditoría']
     };
   }
@@ -52,6 +53,8 @@ function createPrivacidad({ run, insert, one, all, atomic, audit, notify, roles,
       const out = {
         generadoEn: now(), formato: 'application/json',
         perfil: { id: u.id, nombre: u.name, correo: u.email, run: u.run, rol: u.role, creadoEn: u.created_at,
+          telefono: u.phone, domicilio: u.address, comuna: u.comuna, region: u.region,
+          empresa: { razonSocial: u.company_name, rut: u.company_rut, giro: u.company_giro, domicilio: u.company_address },
           avisoPrivacidad: { version: u.privacy_version, aceptadoEn: u.privacy_accepted_at } }
       };
       if (u.role === 'cliente') {

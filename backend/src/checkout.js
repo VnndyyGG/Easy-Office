@@ -4,6 +4,7 @@ const { priceCart, couponProblem, MIN_TOTAL } = require('./cart');
 const { newBuyOrder } = require('./webpay');
 
 const ORDER_TTL_MS = 30 * 60 * 1000;   // una orden "iniciada" más antigua que esto se considera abandonada
+const WEBPAY_FORM_MS = 15 * 60 * 1000;  // pasado este tiempo, una transacción que Webpay sigue viendo INITIALIZED ya no se cobrará
 const RECONCILE_AFTER_MS = 20 * 1000;  // una orden "procesando" se reconsulta a Webpay pasado este tiempo
 const clp = n => '$' + Number(n).toLocaleString('es-CL');
 
@@ -103,7 +104,15 @@ function createCheckout(ctx) {
     if (order.status !== 'procesando' || !order.token || Date.now() - Date.parse(order.updated_at) < RECONCILE_AFTER_MS) return order;
     try {
       let tx = await webpay.status(order.token);
-      if (tx.status === 'INITIALIZED') tx = await webpay.commit(order.token);
+      if (tx.status === 'INITIALIZED') {
+        try { tx = await webpay.commit(order.token); }
+        catch (error) {
+          // Webpay no autorizó el pago (p. ej. el formulario expiró) y rechaza confirmarlo: sin autorización no hay cobro,
+          // así que pasado el plazo del formulario la orden se cierra como rechazada en vez de quedar "procesando".
+          if (Date.now() - Date.parse(order.created_at) < WEBPAY_FORM_MS) throw error;
+          tx = { status: 'FAILED' };
+        }
+      }
       if (['AUTHORIZED', 'FAILED'].includes(tx.status)) await applyResult(order, tx);
     } catch { /* se reintenta en la próxima consulta */ }
     return one('SELECT * FROM orders WHERE id=?', order.id);

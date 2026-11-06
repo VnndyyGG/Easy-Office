@@ -14,7 +14,7 @@ function politica(env = process.env) {
   return {
     version: VERSION, vigenteDesde: VIGENTE_DESDE, responsable, revisionLegalPendiente: true,
     datos: [
-      { categoria: 'Identificación y contacto', detalle: 'Nombre, RUN, correo electrónico y contraseña (se guarda solo su huella criptográfica).' },
+      { categoria: 'Identificación y contacto', detalle: 'Nombre, RUN, correo electrónico y contraseña (se guarda solo su huella criptográfica). Si los completas en «Mi perfil»: teléfono, domicilio y datos de tu empresa (razón social, RUT, giro y domicilio), que solo se usan para rellenar tus trámites cuando tú lo eliges.' },
       { categoria: 'Contenido de los trámites', detalle: 'Los documentos que redactas y los PDF que adjuntas. Pueden incluir datos de otras personas (nombre, RUN, domicilio, estado civil, nacionalidad): ingrésalos solo si cuentas con su autorización o con un fundamento legal para hacerlo.' },
       { categoria: 'Pagos', detalle: 'Monto, orden, código de autorización y últimos 4 dígitos de la tarjeta. El número completo de la tarjeta lo procesa Transbank y no se almacena aquí.' },
       { categoria: 'Firma electrónica', detalle: 'Nombre, RUN y correo de cada firmante, fecha y hora de la firma, dirección IP y navegador, como evidencia de quién firmó y cuándo.' },

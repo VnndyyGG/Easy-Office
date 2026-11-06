@@ -11,8 +11,19 @@ const CATEGORIES = {
 };
 
 const FIELD_TYPES = ['text', 'textarea', 'email', 'number', 'run', 'rut', 'select'];
-const PREFILL = { 'cliente.nombre': 'name', 'cliente.run': 'run', 'cliente.email': 'email' };
-const PREFILL_TYPES = { 'cliente.nombre': ['text'], 'cliente.run': ['run'], 'cliente.email': ['email'] };
+// Dato del perfil del cliente (columna de users) con que se puede autocompletar un campo de plantilla.
+const PREFILL = {
+  'cliente.nombre': 'name', 'cliente.run': 'run', 'cliente.email': 'email', 'cliente.celular': 'phone',
+  'cliente.domicilio': 'address', 'cliente.comuna': 'comuna', 'cliente.region': 'region',
+  'cliente.razon_social': 'company_name', 'cliente.rut_empresa': 'company_rut', 'cliente.giro': 'company_giro',
+  'cliente.empresa_domicilio': 'company_address'
+};
+const PREFILL_TYPES = {
+  'cliente.nombre': ['text'], 'cliente.run': ['run'], 'cliente.email': ['email'], 'cliente.celular': ['text'],
+  'cliente.domicilio': ['text'], 'cliente.comuna': ['text'], 'cliente.region': ['text'],
+  'cliente.razon_social': ['text'], 'cliente.rut_empresa': ['rut'], 'cliente.giro': ['text'],
+  'cliente.empresa_domicilio': ['text']
+};
 const MAX_VALUE = { text: 500, email: 254, number: 30, run: 15, rut: 15, select: 500, textarea: 5000 };
 const KEY = /^[a-z][a-z0-9_]{0,59}$/;
 const PLACEHOLDER = /\{\{([a-z][a-z0-9_]*)\}\}/g;
@@ -116,7 +127,7 @@ function prefillValues(fields, client) {
     if (!f.prefill || !client) continue;
     const raw = client[PREFILL[f.prefill]];
     if (!raw) continue;
-    out[f.key] = f.type === 'run' ? formatRol(raw) : raw;
+    out[f.key] = f.type === 'run' || f.type === 'rut' ? formatRol(raw) : raw;
   }
   return out;
 }
