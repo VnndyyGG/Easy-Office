@@ -24,7 +24,15 @@
       </section>
     }
     @case ('procesando') {
-      <section class="panel"><h2>Estamos confirmando tu pago…</h2><p>Esto toma unos segundos. No cierres esta página.</p></section>
+      @if (sigueProcesando()) {
+        <section class="panel">
+          <h2>Webpay está tardando en confirmar tu pago</h2>
+          <p>No pagues de nuevo. Si el banco no lo autorizó, no se realizó ningún cobro y la orden se cerrará sola en unos minutos.</p>
+          <div class="acciones"><button class="btn-primary" [disabled]="cargando()" (click)="cargarOrden(o.id)">Revisar de nuevo</button></div>
+        </section>
+      } @else {
+        <section class="panel"><h2>Estamos confirmando tu pago…</h2><p>Esto toma unos segundos. No cierres esta página.</p></section>
+      }
     }
     @case ('rechazada') {
       <section class="panel">

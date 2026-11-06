@@ -38,14 +38,36 @@
 
       @if (!isToggled()) {
       <div class="view">
-        <p class="sub">Ingresa con tu correo o tu RUT y tu contraseña.</p>
+        <p class="sub">Ingresa con tu correo o tu RUT/RUN y tu contraseña.</p>
 
         <form class="login-form" (ngSubmit)="onSubmit()">
-          <div class="field">
-            <label for="login-email">Correo electrónico o RUT</label>
-            <input id="login-email" type="text" name="email" [(ngModel)]="email" required autocomplete="username"
-              placeholder="tucorreo@easyoffice.cl o 12.345.678-5">
+          <div class="metodo" role="radiogroup" aria-label="Ingresar con">
+            <button type="button" role="radio" [attr.aria-checked]="metodoLogin() === 'correo'"
+              [class.activo]="metodoLogin() === 'correo'" (click)="setMetodoLogin('correo')">
+              <i class="ti ti-mail"></i> Correo
+            </button>
+            <button type="button" role="radio" [attr.aria-checked]="metodoLogin() === 'rut'"
+              [class.activo]="metodoLogin() === 'rut'" (click)="setMetodoLogin('rut')">
+              <i class="ti ti-id"></i> RUT/RUN
+            </button>
           </div>
+          @if (metodoLogin() === 'correo') {
+          <div class="field">
+            <label for="login-email">Correo electrónico</label>
+            <input id="login-email" type="email" name="email" [(ngModel)]="email" required autocomplete="username"
+              placeholder="tucorreo@easyoffice.cl">
+          </div>
+          } @else {
+          <div class="field">
+            <label for="login-rut">RUT/RUN</label>
+            <input id="login-rut" type="text" name="rutLogin" inputmode="text" [ngModel]="rutLogin"
+              (ngModelChange)="onRutLoginChange($event)" required maxlength="12" autocomplete="username"
+              placeholder="12.345.678-5">
+            @if (!rutLoginValido()) {
+            <small class="field-error">RUT/RUN inválido, revisa el dígito verificador.</small>
+            }
+          </div>
+          }
           <div class="field">
             <label for="login-password">Contraseña</label>
             <div class="pw">
@@ -99,6 +121,15 @@
             </div>
           </div>
 
+          <label class="acepta" [class.marcado]="aceptaPrivacidad()">
+            <input type="checkbox" name="aceptaPrivacidad" [ngModel]="aceptaPrivacidad()" (ngModelChange)="aceptaPrivacidad.set($event)">
+            <span>
+              <i class="ti ti-shield-lock"></i> He leído y acepto el
+              <button type="button" class="link" (click)="verPrivacidad.set(true)">aviso de privacidad</button>.
+              Entiendo cómo Easy Office usará mis datos.
+            </span>
+          </label>
+
           @if (errorRegistro()) {
           <p class="login-error" role="alert">{{ errorRegistro() }}</p>
           }
@@ -126,3 +157,11 @@
     </div>
   </section>
 </div>
+
+@if (verPrivacidad()) {
+<div class="overlay" (click)="verPrivacidad.set(false)">
+  <div class="overlay-win" role="dialog" aria-modal="true" aria-label="Aviso de privacidad" (click)="$event.stopPropagation()">
+    <app-privacidad [modal]="true" (cerrar)="verPrivacidad.set(false)" (aceptar)="aceptarPrivacidad()" />
+  </div>
+</div>
+}

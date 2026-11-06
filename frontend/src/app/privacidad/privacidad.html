@@ -1,0 +1,117 @@
+<div class="pp" [class.pp-modal]="modal()">
+  <header class="pp-head">
+    <span class="logo-tile"><img src="logo.jpg" alt="Easy Office"></span>
+    <div class="pp-title">
+      <h1>Aviso de privacidad</h1>
+      <p>Cómo cuidamos tus datos personales · Ley 19.628 mod. Ley 21.719</p>
+    </div>
+    @if (modal()) {
+    <button type="button" class="pp-x" (click)="cerrar.emit()" aria-label="Cerrar"><i class="ti ti-x"></i></button>
+    }
+  </header>
+
+  <div class="pp-body">
+    @if (error()) {
+    <p class="pp-error" role="alert">{{ error() }}</p>
+    } @else if (!politica()) {
+    <p class="pp-cargando">Cargando aviso de privacidad...</p>
+    } @else {
+    @let p = politica()!;
+
+    <div class="pills">
+      <span class="pill ok">Versión {{ p.version }}</span>
+      <span class="pill ok">Vigente desde {{ fecha(p.vigenteDesde) }}</span>
+      @if (p.revisionLegalPendiente) {
+      <span class="pill wa"><i class="ti ti-alert-triangle"></i> Revisión legal pendiente</span>
+      }
+    </div>
+
+    <nav class="pp-nav">
+      @for (s of secciones; track s[0]) {
+      <button type="button" (click)="ir(s[0])">{{ s[1] }}</button>
+      }
+    </nav>
+
+    <section class="cd" id="pp-responsable">
+      <h2><span class="n">1</span>Responsable de tus datos</h2>
+      <div class="grid">
+        <div><small>Razón social</small><span [class.falta]="p.responsable.nombre.pendiente">{{ p.responsable.nombre.valor }}</span></div>
+        <div><small>RUT</small><span [class.falta]="p.responsable.rut.pendiente">{{ p.responsable.rut.valor }}</span></div>
+        <div><small>Domicilio</small><span [class.falta]="p.responsable.domicilio.pendiente">{{ p.responsable.domicilio.valor }}</span></div>
+        <div><small>Correo para tus derechos</small><span [class.falta]="p.responsable.contacto.pendiente">{{ p.responsable.contacto.valor }}</span></div>
+      </div>
+    </section>
+
+    <section class="cd" id="pp-datos">
+      <h2><span class="n">2</span>Qué datos guardamos</h2>
+      @for (d of p.datos; track d.categoria) {
+      <div class="it">
+        <i class="ti" [class]="iconoDato(d.categoria)"></i>
+        <div><b>{{ d.categoria }}</b><p>{{ d.detalle }}</p></div>
+      </div>
+      }
+    </section>
+
+    <section class="cd" id="pp-finalidades">
+      <h2><span class="n">3</span>Para qué los usamos</h2>
+      @for (f of p.finalidades; track f.finalidad) {
+      <div class="it">
+        <i class="ti ti-target"></i>
+        <div class="grow">{{ f.finalidad }}</div>
+        <span class="pill ok">{{ f.base }}</span>
+      </div>
+      }
+    </section>
+
+    <section class="cd" id="pp-destinatarios">
+      <h2><span class="n">4</span>Con quién los compartimos</h2>
+      @for (d of p.destinatarios; track d.quien) {
+      <div class="it">
+        <i class="ti ti-share"></i>
+        <div class="grow"><b>{{ d.quien }}</b><p>{{ d.para }}</p></div>
+        <span class="pill" [class.ok]="!ubicacion(d).aviso" [class.wa]="ubicacion(d).aviso">{{ ubicacion(d).texto }}</span>
+      </div>
+      }
+    </section>
+
+    <section class="cd" id="pp-conservacion">
+      <h2><span class="n">5</span>Cuánto tiempo los guardamos</h2>
+      <div class="it">
+        <i class="ti ti-hourglass"></i>
+        <p>{{ p.conservacion }}</p>
+      </div>
+    </section>
+
+    <section class="cd" id="pp-derechos">
+      <h2><span class="n">6</span>Tus derechos</h2>
+      <div class="derechos">
+        @for (d of p.derechos; track d.derecho) {
+        <div class="der">
+          <b><i class="ti" [class]="iconoDerecho(d.derecho)"></i> {{ d.derecho }}</b>
+          <p>{{ d.detalle }}</p>
+        </div>
+        }
+      </div>
+      <div class="note"><i class="ti ti-clock"></i>{{ p.plazos }}</div>
+      <p class="extra"><b>Cómo pedirlo:</b> {{ p.canal }}</p>
+      <p class="extra">{{ p.reclamo }}</p>
+    </section>
+
+    <section class="cd" id="pp-seguridad">
+      <h2><span class="n">7</span>Cómo protegemos tus datos</h2>
+      <div class="grid">
+        @for (s of p.seguridad; track $index) {
+        <div class="seg"><i class="ti" [class]="iconoSeguridad($index)"></i><span>{{ s }}</span></div>
+        }
+      </div>
+    </section>
+    }
+  </div>
+
+  @if (modal()) {
+  <footer class="pp-foot">
+    <button type="button" class="btn-sec" (click)="cerrar.emit()">Cerrar</button>
+    <button type="button" class="btn-ok" (click)="aceptar.emit()" [disabled]="!politica()">Leí y acepto</button>
+  </footer>
+  }
+</div>

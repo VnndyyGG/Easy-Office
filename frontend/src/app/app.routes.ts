@@ -1,7 +1,9 @@
 import { Routes } from '@angular/router';
 import { Login } from './login/login';
+import { Privacidad } from './privacidad/privacidad';
 import { Shell } from './shell/shell';
 import { Carrito } from './carrito/carrito';
+import { ClientePerfil } from './cliente-perfil/cliente-perfil';
 import { ClienteDashboard } from './cliente-dashboard/cliente-dashboard';
 import { AdminDashboard } from './admin-dashboard/admin-dashboard';
 import { ComercialDashboard } from './comercial-dashboard/comercial-dashboard';
@@ -10,6 +12,7 @@ import { authGuard, roleGuard } from './auth.guard';
 
 export const routes: Routes = [
   { path: '', component: Login },
+  { path: 'privacidad', component: Privacidad },
   {
     path: '',
     component: Shell,
@@ -17,6 +20,7 @@ export const routes: Routes = [
     children: [
       { path: 'cliente', component: ClienteDashboard, canActivate: [roleGuard('cliente')] },
       { path: 'cliente/carrito', component: Carrito, canActivate: [roleGuard('cliente')] },
+      { path: 'cliente/perfil', component: ClientePerfil, canActivate: [roleGuard('cliente')] },
       { path: 'admin', component: AdminDashboard, canActivate: [roleGuard('admin')] },
       { path: 'comercial', component: ComercialDashboard, canActivate: [roleGuard('comercial')] },
       { path: 'finanzas', component: FinanzasDashboard, canActivate: [roleGuard('finanzas')] },

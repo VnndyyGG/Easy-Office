@@ -1,0 +1,346 @@
+.pp {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 32px 24px 48px;
+  background: var(--surface);
+  min-height: 100vh;
+}
+
+// En modo modal la ventana tiene alto fijo: cabecera y botones quedan fijos y solo el cuerpo hace scroll.
+.pp-modal {
+  min-height: 0;
+  max-height: min(88vh, 900px);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  border-radius: 20px;
+  overflow: hidden;
+  background: var(--surface);
+
+  .pp-head {
+    padding: 20px 24px;
+    margin: 0;
+    background: var(--white);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .pp-body {
+    overflow-y: auto;
+    padding: 20px 24px;
+  }
+}
+
+.pp-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.logo-tile {
+  background: #F7F7F7; // mismo gris del JPG del logo
+  border-radius: 14px;
+  padding: 6px 10px;
+  line-height: 0;
+  flex: none;
+
+  img {
+    height: 44px;
+  }
+}
+
+.pp-title {
+  flex: 1;
+
+  h1 {
+    margin: 0;
+    font-size: 26px;
+  }
+
+  p {
+    margin: 2px 0 0;
+    font-size: 13.5px;
+    color: var(--ink-soft);
+  }
+}
+
+.pp-x {
+  border: 0;
+  background: none;
+  font-size: 22px;
+  color: var(--ink-soft);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 8px;
+
+  &:hover {
+    background: var(--surface);
+  }
+}
+
+.pills {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.pill {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 3px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+  align-self: flex-start;
+}
+
+.ok {
+  background: var(--green-bg);
+  color: var(--green-2);
+}
+
+.wa {
+  background: var(--amber-bg);
+  color: var(--amber);
+}
+
+.pp-nav {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+
+  button {
+    font-size: 12.5px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--white);
+    color: var(--ink);
+    cursor: pointer;
+    transition: border-color .15s, color .15s;
+
+    &:hover {
+      border-color: var(--green-2);
+      color: var(--green-2);
+    }
+  }
+}
+
+.cd {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 16px 18px;
+  margin-bottom: 14px;
+  scroll-margin-top: 12px;
+
+  h2 {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0 0 10px;
+    font-size: 17px;
+  }
+}
+
+.n {
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  background: var(--green-bg);
+  color: var(--green-2);
+  font: 600 13px 'Inter', sans-serif;
+  display: grid;
+  place-items: center;
+}
+
+.it {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+  font-size: 13.5px;
+  line-height: 1.5;
+
+  &:first-of-type {
+    border-top: 0;
+  }
+
+  > .ti {
+    color: var(--green-2);
+    font-size: 19px;
+    margin-top: 1px;
+  }
+
+  b {
+    font-weight: 600;
+  }
+
+  p {
+    margin: 2px 0 0;
+    color: var(--ink-soft);
+  }
+
+  > p {
+    margin: 0;
+  }
+}
+
+.grow {
+  flex: 1;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  font-size: 13.5px;
+
+  small {
+    display: block;
+    font-size: 12px;
+    color: var(--ink-soft);
+    margin-bottom: 2px;
+  }
+}
+
+// Datos de la empresa que aún no se configuran en el .env del backend.
+.falta {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--amber-bg);
+  color: var(--amber);
+}
+
+.derechos {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.der {
+  padding: 11px 12px;
+  border-radius: 11px;
+  background: var(--surface);
+  font-size: 13px;
+
+  b {
+    font-weight: 600;
+  }
+
+  .ti {
+    color: var(--green-2);
+  }
+
+  p {
+    margin: 4px 0 0;
+    color: var(--ink-soft);
+    line-height: 1.45;
+  }
+}
+
+.note {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--green-bg);
+  color: var(--green-2);
+  font-size: 13px;
+
+  .ti {
+    font-size: 19px;
+  }
+}
+
+.extra {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--ink-soft);
+  line-height: 1.5;
+
+  b {
+    color: var(--ink);
+    font-weight: 600;
+  }
+}
+
+.seg {
+  display: flex;
+  gap: 8px;
+  color: var(--ink-soft);
+  line-height: 1.45;
+
+  .ti {
+    color: var(--green-2);
+    font-size: 18px;
+  }
+}
+
+.pp-cargando,
+.pp-error {
+  padding: 24px;
+  text-align: center;
+  color: var(--ink-soft);
+}
+
+.pp-error {
+  color: var(--red);
+}
+
+.pp-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 24px;
+  background: var(--white);
+  border-top: 1px solid var(--border);
+
+  button {
+    height: 44px;
+    padding: 0 20px;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .btn-sec {
+    background: var(--white);
+    border: 1.5px solid var(--border);
+    color: var(--ink);
+  }
+
+  .btn-ok {
+    background: var(--green-2);
+    border: 0;
+    color: #fff;
+
+    &:disabled {
+      opacity: .6;
+      cursor: progress;
+    }
+  }
+}
+
+@media (max-width: 640px) {
+  .grid,
+  .derechos {
+    grid-template-columns: 1fr;
+  }
+
+  .pp-title h1 {
+    font-size: 21px;
+  }
+
+  .logo-tile img {
+    height: 34px;
+  }
+}

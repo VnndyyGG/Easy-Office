@@ -48,10 +48,10 @@ export class Auth {
     }
   }
 
-  async register(name: string, email: string, rut: string, password: string): Promise<{ ok: boolean; message?: string }> {
+  async register(name: string, email: string, rut: string, password: string, acceptPrivacy: boolean): Promise<{ ok: boolean; message?: string }> {
     try {
       const result: any = await firstValueFrom(
-        this.http.post(`${API_URL}/auth/register`, { name, email, rut, password })
+        this.http.post(`${API_URL}/auth/register`, { name, email, rut, password, acceptPrivacy })
       );
       this.guardarSesion(result.token, result.perfil);
       return { ok: true };
@@ -60,6 +60,12 @@ export class Auth {
       const msg = e.error?.error?.message || e.error?.message || 'No se pudo crear la cuenta.';
       return { ok: false, message: msg };
     }
+  }
+
+  /** Tras editar "Mi perfil": refresca el nombre e iniciales que muestra la cabecera. */
+  actualizarPerfil(perfil: Rol) {
+    const t = this.token();
+    if (t) this.guardarSesion(t, perfil);
   }
 
   private guardarSesion(token: string, perfil: Rol) {

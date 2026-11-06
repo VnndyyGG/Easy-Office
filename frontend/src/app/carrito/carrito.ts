@@ -27,6 +27,7 @@ export class Carrito implements OnInit, OnDestroy {
 
   readonly clp = clp;
   private timer: ReturnType<typeof setInterval> | null = null;
+  sigueProcesando = signal(false);   // Webpay tarda más de lo normal: se deja de reconsultar sola y se ofrece hacerlo a mano
   seleccionados = computed(() => this.items().filter(i => this.seleccion().has(i.id)));
 
   constructor(private api: Tramites, private route: ActivatedRoute, private router: Router) {}
@@ -122,6 +123,7 @@ export class Carrito implements OnInit, OnDestroy {
       const o = await firstValueFrom(this.api.getOrden(id));
       this.orden.set(o);
       // "procesando": el servidor está confirmando con Webpay; se reconsulta unos segundos.
+      this.sigueProcesando.set(o.status === 'procesando' && intento >= 10);
       if (o.status === 'procesando' && intento < 10) {
         this.timer = setTimeout(() => this.cargarOrden(id, intento + 1), 3000) as unknown as ReturnType<typeof setInterval>;
       }

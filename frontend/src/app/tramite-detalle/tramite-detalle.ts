@@ -1,7 +1,7 @@
 import { Component, HostListener, OnInit, computed, effect, input, output, signal } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import {
   ArticuloElegido, CampoPlantilla, CaseDetail, Capabilities, DireccionSugerida, Notificacion, Pago, Plantilla, Tramites,
@@ -29,7 +29,7 @@ const EDITABLES = ['borrador', 'en_redaccion', 'observado'];
 const CONSERVAR = [...EDITABLES, 'pendiente_pago'];
 
 @Component({
-  imports: [FormsModule, NgTemplateOutlet],
+  imports: [FormsModule, NgTemplateOutlet, RouterLink],
   selector: 'app-tramite-detalle',
   styleUrl: './tramite-detalle.scss',
   templateUrl: './tramite-detalle.html',
@@ -92,6 +92,7 @@ export class TramiteDetalle implements OnInit {
       .filter(k => k !== 'clausulas');
     return claves.map(k => sel.fields.find(f => f.key === k) ?? this.campoPorDefecto(k));
   });
+
   // Campos agrupados por sección, respetando el orden de la plantilla
   secciones = computed(() => {
     const m = new Map<string, CampoPlantilla[]>();
@@ -100,7 +101,7 @@ export class TramiteDetalle implements OnInit {
   });
   usaArticulos = computed(() => /\{\{\s*clausulas\s*\}\}/.test(this.plantillaSel()?.content ?? ''));
   faltantes = computed(() => {
-    const f = this.campos().filter(c => c.required && !(this.valores()[c.key] ?? '').trim()).map(c => c.label);
+    const f = this.campos().filter(c => this.loLlenaElCliente(c) && !(this.valores()[c.key] ?? '').trim()).map(c => c.label);
     if (this.usaArticulos()) {
       if (!this.articulos().length) f.push('Al menos un artículo');
       this.articulos().forEach(a => {
@@ -269,6 +270,8 @@ export class TramiteDetalle implements OnInit {
   private conDefectos(campos: CampoPlantilla[]) {
     const defectos = Object.fromEntries(campos.filter(c => c.default).map(c => [c.key, c.default!]));
     // Contratos con sucursal: se precargan los datos de la primera (hoy, La Florida).
+    const folio = this.tramite()?.contract_folio;
+    if (folio && campos.some(c => this.esCampoFolio(c))) defectos['folio'] = folio;
     return campos.some(c => c.key === 'sucursal_direccion') ? { ...defectos, ...SUCURSALES[0].valores } : defectos;
   }
 
@@ -283,9 +286,62 @@ export class TramiteDetalle implements OnInit {
     if (s) { this.valores.update(v => ({ ...v, ...s.valores })); this.tocado.set(true); }
   }
 
+  // ---- Diseño del formulario: ícono por sección y avance de campos obligatorios ----
+  private static readonly ICONOS: Record<string, string> = {
+    'Sucursal': 'building-store', 'Contrato': 'file-text', 'Renta y plazo': 'calendar-dollar',
+    'Servicios y pago': 'receipt', 'Arrendador': 'user', 'Arrendatario': 'user', 'Arrendataria': 'user',
+    'Representante legal': 'id-badge-2', 'Apoderado': 'id-badge-2', 'Empresa cliente': 'building',
+    'Sociedad': 'building', 'Contacto del cliente': 'phone', 'Inmueble': 'home', 'Bodega': 'box',
+    'Estacionamiento': 'parking', 'Vehículo': 'car', 'Acuerdo': 'file-certificate',
+    'Cláusula': 'list-details', 'Firmas': 'signature',
+  };
+  iconoSeccion(titulo: string) { return TramiteDetalle.ICONOS[titulo] ?? 'forms'; }
+  obligatorios = computed(() => this.campos().filter(c => this.loLlenaElCliente(c)).length);
+  completosObligatorios = computed(() => this.obligatorios() - this.campos()
+    .filter(c => this.loLlenaElCliente(c) && !(this.valores()[c.key] ?? '').trim()).length);
+
+  // ---- Folio del contrato: lo asigna Easy Office al generar el documento, el cliente no lo escribe ----
+  esCampoFolio(c: CampoPlantilla) { return c.key === 'folio'; }
+  private loLlenaElCliente(c: CampoPlantilla) { return c.required && !this.esCampoFolio(c); }
+  private async asegurarFolio() {
+    if (!this.campos().some(c => this.esCampoFolio(c))) return;
+    const folio = this.tramite()?.contract_folio
+      ?? (await firstValueFrom(this.api.asignarFolioContrato(this.id(), this.sucursalElegida() || SUCURSALES[0].sigla))).folio;
+    this.valores.update(v => ({ ...v, folio }));
+    this.tramite.update(t => t && { ...t, contract_folio: folio });
+  }
+
+  // ---- Autocompletado con "Mi perfil": solo si el cliente lo acepta en este trámite ----
+  usoPerfil = signal<'si' | 'no' | null>(null);
+  rellenadosPerfil = signal(0);
+  /** Campos vacíos del formulario que se pueden llenar con datos del perfil. */
+  camposPerfil = computed(() => {
+    const prefill = this.tramite()?.prefill ?? {}, v = this.valores();
+    return this.campos().filter(c => prefill[c.key] && !(v[c.key] ?? '').trim());
+  });
+  etiquetasPerfil = computed(() => {
+    const l = this.camposPerfil().map(c => c.label.toLowerCase());
+    return l.length > 4 ? `${l.slice(0, 4).join(', ')} y ${l.length - 4} más` : l.join(', ');
+  });
+  ofertaPerfil = computed(() =>
+    this.auth.currentRole()?.tipo === 'cliente' && this.usoPerfil() === null && this.camposPerfil().length > 0);
+  usarPerfil() {
+    const prefill = this.tramite()?.prefill ?? {};
+    // Los contratos guardan comunas, regiones y direcciones en mayúsculas (igual que al elegir una sugerencia).
+    const nuevos = Object.fromEntries(this.camposPerfil().map(c => {
+      const v = prefill[c.key];
+      return [c.key, esComuna(c.key) || esRegion(c.key) || /(direccion|domicilio)$/.test(c.key) ? mayus(v) : v];
+    }));
+    this.rellenadosPerfil.set(Object.keys(nuevos).length);
+    this.valores.update(o => ({ ...o, ...nuevos }));
+    this.usoPerfil.set('si');
+    this.tocado.set(true);
+  }
+
   inputType(c: CampoPlantilla) { return c.type === 'email' ? 'email' : 'text'; }
   elegirPlantilla(id: string) {
     this.plantillaId.set(id ? Number(id) : null);
+    this.usoPerfil.set(null);   // otro documento: se vuelve a preguntar si se usa el perfil
     this.articulos.set([]);
     this.valores.set(this.conDefectos(this.campos()));   // precarga valores por defecto (ciudad, sitio, duración...)
   }
@@ -528,6 +584,7 @@ export class TramiteDetalle implements OnInit {
 
   /** Genera el texto final en el backend: valida RUT, correo y opciones antes de guardar. */
   private async generarEnServidor(): Promise<string> {
+    await this.asegurarFolio();
     const res = await firstValueFrom(this.api.renderPlantilla(this.plantillaSel()!.id,
       { values: this.valores(), clauses: this.articulos() }));
     if (!res.complete) throw new Error('Faltan datos por completar.');
