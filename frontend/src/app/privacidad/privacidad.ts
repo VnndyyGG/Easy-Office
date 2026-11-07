@@ -1,8 +1,8 @@
 import { Component, input, output, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
-
-const API = 'http://localhost:3000/api';
+import { environment } from '../../environments/environment';
+const API = environment.apiUrl;
 
 // ---- Modelo (tal como lo devuelve GET /api/privacidad/politica) ----
 interface Dato { valor: string; pendiente?: boolean; }

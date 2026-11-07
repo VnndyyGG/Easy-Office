@@ -2,11 +2,8 @@ import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable, map } from 'rxjs';
 import { Auth, Rol } from './auth';
-
-
-
-const API = 'http://localhost:3000/api';
-
+import { environment } from '../environments/environment';
+const API = environment.apiUrl;
 // ---- Modelos (snake_case = como los devuelve el backend) ----
 export interface Tramite {
   id: number;

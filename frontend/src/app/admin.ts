@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Auth, Rol } from './auth';
 import { CaseRow, Plantilla, Servicio } from './tramites';
-import { environment } from '../environments/environment.development';
+import { environment } from '../environments/environment';
 const API = environment.apiUrl;
 
 // ---- Modelos del panel de administración (como los devuelve el backend) ----
