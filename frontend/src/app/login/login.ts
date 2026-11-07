@@ -2,9 +2,10 @@ import { Component, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { Auth } from '../auth';
+import { Privacidad } from '../privacidad/privacidad';
 
 @Component({
-  imports: [FormsModule],
+  imports: [FormsModule, Privacidad],
   selector: 'app-login',
   styleUrl: './login.scss',
   templateUrl: './login.html',
@@ -18,12 +19,16 @@ export class Login {
   errorRegistro = signal('');
   mostrarClave = signal(false);
   cargando = signal(false);
-  runValido = signal(true);
+  rutValido = signal(true);
+  // Iniciar sesión con correo o con RUT (el RUT se formatea solo: 12.345.678-5)
+  metodoLogin = signal<'correo' | 'rut'>('correo');
+  rutLogin = '';
+  rutLoginValido = signal(true);
 
   isToggled = signal(false);
   avisoClaveUnica = signal(false);
-
-  aceptaPrivacidad = false;
+  aceptaPrivacidad = signal(false);
+  verPrivacidad = signal(false);
 
   constructor(private auth: Auth, private router: Router) { }
 
@@ -59,6 +64,23 @@ export class Login {
   }
 
 
+  aceptarPrivacidad() {
+    this.aceptaPrivacidad.set(true);
+    this.verPrivacidad.set(false);
+    if (this.errorRegistro() === 'Debes leer y aceptar el aviso de privacidad.') this.errorRegistro.set('');
+  }
+
+  setMetodoLogin(m: 'correo' | 'rut') {
+    this.metodoLogin.set(m);
+    this.errorLogin.set('');
+  }
+
+  onRutLoginChange(valor: string) {
+    this.rutLogin = this.formatearRut(valor);
+    const limpio = this.rutLogin.replace(/[.\-]/g, '');
+    this.rutLoginValido.set(limpio.length < 8 || this.validarRut(this.rutLogin));
+  }
+
   registrarConClaveUnica() {
     this.avisoClaveUnica.set(true);
   }
@@ -72,15 +94,21 @@ export class Login {
   }
 
   async onSubmit() {
-    if (!this.email.trim() || !this.password) {
-      this.errorLogin.set('Ingresa tu correo o RUN y tu contraseña.');
+    const porRut = this.metodoLogin() === 'rut';
+    const usuario = (porRut ? this.rutLogin : this.email).trim();
+    if (!usuario || !this.password) {
+      this.errorLogin.set(porRut ? 'Ingresa tu RUT/RUN y tu contraseña.' : 'Ingresa tu correo y tu contraseña.');
+      return;
+    }
+    if (porRut && !this.validarRut(usuario)) {
+      this.errorLogin.set('El RUT/RUN ingresado no es válido.');
       return;
     }
     this.cargando.set(true);
-    const ok = await this.auth.attemptLogin(this.email.trim(), this.password);
+    const ok = await this.auth.attemptLogin(usuario, this.password);
     this.cargando.set(false);
     if (!ok) {
-      this.errorLogin.set('Correo/RUN o contraseña incorrectos.');
+      this.errorLogin.set(porRut ? 'RUT/RUN o contraseña incorrectos.' : 'Correo o contraseña incorrectos.');
       return;
     }
     this.errorLogin.set('');
@@ -101,17 +129,25 @@ export class Login {
       this.errorRegistro.set('La contraseña debe tener al menos 10 caracteres.');
       return;
     }
-    if (!this.validarRun(this.run)) {
+    if (!this.validarRut(this.run)) {
       this.errorRegistro.set('El RUN ingresado no es válido.');
+      return;
+    }
+    if (!this.aceptaPrivacidad()) {
+      this.errorRegistro.set('Debes leer y aceptar el aviso de privacidad.');
+      return;
+    }
+    if (!this.aceptaPrivacidad()) {
+      this.errorRegistro.set('Debes leer y aceptar el aviso de privacidad.');
       return;
     }
     this.cargando.set(true);
     const res = await this.auth.register(
       this.nombre.trim(),
       this.email.trim(),
-      this.run.trim(),
+      this.rut.trim(),
       this.password,
-      this.aceptaPrivacidad
+      this.aceptaPrivacidad()
     );
     this.cargando.set(false);
     if (!res.ok) {

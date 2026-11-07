@@ -167,3 +167,25 @@ CREATE TABLE IF NOT EXISTS security_incidents (
   people_affected INTEGER, measures TEXT NOT NULL DEFAULT '', reported_to_agency_at TEXT, notified_people_at TEXT,
   status TEXT NOT NULL DEFAULT 'abierto' CHECK(status IN ('abierto','contenido','cerrado')), created_by INTEGER REFERENCES users(id)
 );
+
+-- ===== Perfil del cliente (autocompletado de trámites) =====
+-- Todos opcionales: el cliente los completa en "Mi perfil" y decide en cada trámite si se usan.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT NOT NULL DEFAULT '';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS address TEXT NOT NULL DEFAULT '';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS comuna TEXT NOT NULL DEFAULT '';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS region TEXT NOT NULL DEFAULT '';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS company_name TEXT NOT NULL DEFAULT '';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS company_rut TEXT NOT NULL DEFAULT '';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS company_giro TEXT NOT NULL DEFAULT '';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS company_address TEXT NOT NULL DEFAULT '';
+
+-- ===== Folio del contrato (lo asigna Easy Office, no el cliente) =====
+-- Formato SIGLA-NNNN-AÑO, p. ej. LF-0153-2026. Un correlativo por sucursal y año.
+-- Para seguir la numeración que ya usa la empresa, fija el último número emitido, p. ej.:
+--   INSERT INTO contract_folios(branch, year, last_number) VALUES ('LF', 2026, 152)
+--   ON CONFLICT (branch, year) DO UPDATE SET last_number = EXCLUDED.last_number;
+CREATE TABLE IF NOT EXISTS contract_folios (
+  branch TEXT NOT NULL, year INTEGER NOT NULL, last_number INTEGER NOT NULL DEFAULT 0 CHECK(last_number >= 0),
+  PRIMARY KEY (branch, year)
+);
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS contract_folio TEXT UNIQUE;

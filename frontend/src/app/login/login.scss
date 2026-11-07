@@ -258,6 +258,93 @@ h1 {
   line-height: 1.4;
 }
 
+// ---- Ingresar con correo o RUT ----
+.metodo {
+  display: flex;
+  gap: 8px;
+
+  button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border: 1.5px solid var(--border);
+    border-radius: 999px;
+    background: #fff;
+    color: var(--ink-soft);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+
+    &.activo {
+      border-color: var(--green-2);
+      background: var(--green-bg);
+      color: var(--green-2);
+    }
+  }
+}
+
+// ---- Aceptación del aviso de privacidad ----
+.acepta {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: 13.5px !important;
+  line-height: 1.5;
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: background .15s, border-color .15s;
+
+  input {
+    width: 18px !important;
+    height: 18px !important;
+    margin-top: 2px;
+    flex: none;
+    padding: 0;
+    accent-color: var(--green-2);
+  }
+
+  .ti {
+    color: var(--green-2);
+  }
+
+  &.marcado {
+    background: var(--green-bg);
+    border-color: var(--green-2);
+    color: var(--green-2);
+  }
+}
+
+.link {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: var(--green-2);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(20, 24, 26, .55);
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+
+.overlay-win {
+  width: 100%;
+  max-width: 760px;
+}
+
 footer {
   margin-top: 36px;
   font-size: 12.5px;

@@ -280,6 +280,44 @@ function createApp(db, options = {}) {
     });
     res.sendStatus(204);
   });
+  // ---- Mi perfil (cliente): datos opcionales para autocompletar sus trámites ----
+  const perfilCliente = u => ({
+    nombre: u.name, run: u.run, email: u.email, telefono: u.phone, domicilio: u.address, comuna: u.comuna, region: u.region,
+    razonSocial: u.company_name, rutEmpresa: u.company_rut, giro: u.company_giro, domicilioEmpresa: u.company_address
+  });
+  /** Celular o fijo chileno: 9 dígitos (con o sin +56). Se guarda como "+56 9 1234 5678". */
+  const telefono = value => {
+    const t = v.text(value, 'telefono', 20, 0);
+    if (!t) return '';
+    const d = t.replace(/[\s().-]/g, '').replace(/^\+?56/, '');
+    if (!/^\d{9}$/.test(d)) v.fail(400, 'VALIDATION_ERROR', 'Teléfono inválido: usa 9 dígitos, por ejemplo +56 9 1234 5678.');
+    return `+56 ${d[0]} ${d.slice(1, 5)} ${d.slice(5)}`;
+  };
+  app.get('/api/perfil', roles('cliente'), (req, res) => res.json(perfilCliente(req.user)));
+  app.patch('/api/perfil', roles('cliente'), async (req, res) => {
+    const b = req.body || {}, u = req.user;
+    // Solo cambia lo que se envía; el RUN y el correo no se editan aquí (identifican la cuenta).
+    const campo = (key, actual, limpiar) => (b[key] === undefined ? actual : limpiar(b[key]));
+    const datos = {
+      name: campo('nombre', u.name, x => v.text(x, 'nombre', 120)),
+      phone: campo('telefono', u.phone, telefono),
+      address: campo('domicilio', u.address, x => v.text(x, 'domicilio', 200, 0)),
+      comuna: campo('comuna', u.comuna, x => v.text(x, 'comuna', 80, 0)),
+      region: campo('region', u.region, x => v.text(x, 'region', 80, 0)),
+      company_name: campo('razonSocial', u.company_name, x => v.text(x, 'razonSocial', 160, 0)),
+      company_rut: campo('rutEmpresa', u.company_rut, x => v.rut(v.text(x, 'rutEmpresa', 15, 0))),
+      company_giro: campo('giro', u.company_giro, x => v.text(x, 'giro', 160, 0)),
+      company_address: campo('domicilioEmpresa', u.company_address, x => v.text(x, 'domicilioEmpresa', 200, 0))
+    };
+    await atomic(async () => {
+      await run('UPDATE users SET name=?,phone=?,address=?,comuna=?,region=?,company_name=?,company_rut=?,company_giro=?,company_address=? WHERE id=?',
+        ...Object.values(datos), u.id);
+      await audit(u.id, 'perfil.actualizado', 'usuario', u.id);
+    });
+    const actualizado = await one('SELECT * FROM users WHERE id=?', u.id);
+    res.json({ ...perfilCliente(actualizado), perfil: profile(actualizado) });
+  });
+
   app.get('/api/usuarios', roles('admin'), async (req, res) => {
     const { limit, offset } = v.pagination(req.query);
     res.json({ items: (await all('SELECT * FROM users ORDER BY id LIMIT ? OFFSET ?', limit, offset)).map(profile) });
@@ -651,7 +689,7 @@ function createApp(db, options = {}) {
       );
 
       const client = await one(
-        'SELECT name, run, email FROM users WHERE id=?',
+        `SELECT ${Object.values(tpl.PREFILL).join(', ')} FROM users WHERE id=?`,
         row.client_id
       );
 
@@ -881,6 +919,25 @@ function createApp(db, options = {}) {
     );
   });
 
+  // Folio del contrato: correlativo por sucursal y año (LF-0153-2026). Se asigna una sola vez por trámite,
+  // al generar el documento, para no gastar números en borradores que nunca se completan.
+  app.post('/api/tramites/:id/folio-contrato', roles('admin', 'comercial', 'cliente'), async (req, res) => {
+    const row = await caseFor(req, true), b = req.body || {};
+    if (row.contract_folio) return res.json({ folio: row.contract_folio });
+    const branch = v.text(b.sucursal || 'LF', 'sucursal', 4).toUpperCase();
+    if (!/^[A-Z]{2,4}$/.test(branch)) v.fail(400, 'INVALID_BRANCH', 'Sucursal no válida.');
+    const folio = await atomic(async () => {
+      const locked = await one('SELECT contract_folio FROM cases WHERE id=? FOR UPDATE', row.id);
+      if (locked.contract_folio) return locked.contract_folio;
+      const year = Number(now().slice(0, 4));
+      const { last_number: n } = await one('INSERT INTO contract_folios(branch,year,last_number) VALUES(?,?,1) ON CONFLICT(branch,year) DO UPDATE SET last_number=contract_folios.last_number+1 RETURNING last_number', branch, year);
+      const value = `${branch}-${String(n).padStart(4, '0')}-${year}`;
+      await run('UPDATE cases SET contract_folio=?, updated_at=? WHERE id=?', value, now(), row.id);
+      await audit(req.user.id, 'tramite.folio_contrato', 'tramite', row.id, { folio: value });
+      return value;
+    });
+    res.json({ folio });
+  });
   app.post('/api/tramites/:id/documentos', roles('admin', 'comercial', 'cliente'), async (req, res) => {
     const row = await caseFor(req, true), b = req.body || {};
     if (!['borrador', 'en_redaccion', 'observado'].includes(row.status)) v.fail(409, 'DOCUMENT_LOCKED', 'Solo se puede editar en borrador o con observaciones.');

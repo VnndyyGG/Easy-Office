@@ -52,10 +52,10 @@ export class Auth {
     }
   }
 
-  async register(name: string, email: string, run: string, password: string, acceptPrivacy: boolean): Promise<{ ok: boolean; message?: string }> {
+  async register(name: string, email: string, rut: string, password: string, acceptPrivacy: boolean): Promise<{ ok: boolean; message?: string }> {
     try {
       const result: any = await firstValueFrom(
-        this.http.post(`${API_URL}/auth/register`, { name, email, run, password, acceptPrivacy })
+        this.http.post(`${API_URL}/auth/register`, { name, email, rut, password, acceptPrivacy })
       );
       this.guardarSesion(result.token, result.perfil);
       return { ok: true };
@@ -66,11 +66,10 @@ export class Auth {
     }
   }
 
-  async aceptarPrivacidad(version: string) {
-    await firstValueFrom(this.http.post(`${API_URL}/privacidad/aceptar`, { version }, { headers: { Authorization: `Bearer ${this.token()}` } }));
-    const p = { ...this.currentRole()!, privacidadAceptada: true };
-    this.currentRole.set(p);
-    sessionStorage.setItem('perfil', JSON.stringify(p));
+  /** Tras editar "Mi perfil": refresca el nombre e iniciales que muestra la cabecera. */
+  actualizarPerfil(perfil: Rol) {
+    const t = this.token();
+    if (t) this.guardarSesion(t, perfil);
   }
 
   private guardarSesion(token: string, perfil: Rol) {

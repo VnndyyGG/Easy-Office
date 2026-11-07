@@ -1,81 +1,86 @@
-import { Component, OnInit, signal } from '@angular/core';
-import { RouterLink } from '@angular/router';
-import { HttpClient, HttpHeaders } from '@angular/common/http';
-import { FormsModule } from '@angular/forms';
+import { Component, input, output, signal } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
-import { Auth } from '../auth';
-import { SolicitudDatos, Tramites } from '../tramites';
-import { mensajeError } from '../flujo';
-import { environment } from '../../environments/environment';
-const API = environment.apiUrl;
 
-const TIPOS: Record<string, string> = {
-  acceso: 'Acceso (saber qué datos tienen de mí)', rectificacion: 'Rectificación (corregir datos)', supresion: 'Supresión (eliminar mis datos)',
-  oposicion: 'Oposición a un tratamiento', portabilidad: 'Portabilidad (recibir mis datos)', bloqueo: 'Bloqueo temporal',
+const API = 'http://localhost:3000/api';
+
+// ---- Modelo (tal como lo devuelve GET /api/privacidad/politica) ----
+interface Dato { valor: string; pendiente?: boolean; }
+export interface Politica {
+  version: string;
+  vigenteDesde: string;
+  revisionLegalPendiente: boolean;
+  responsable: { nombre: Dato; rut: Dato; domicilio: Dato; contacto: Dato; delegado: Dato };
+  datos: { categoria: string; detalle: string }[];
+  finalidades: { finalidad: string; base: string }[];
+  destinatarios: { quien: string; para: string; fuera_de_chile: boolean | null }[];
+  conservacion: string;
+  derechos: { derecho: string; detalle: string }[];
+  plazos: string;
+  canal: string;
+  reclamo: string;
+  seguridad: string[];
+}
+
+// Íconos de Tabler por categoría; si llega una nueva desde el backend usa el genérico.
+const ICONO_DATO: Record<string, string> = {
+  'Identificación y contacto': 'ti-id',
+  'Contenido de los trámites': 'ti-file-text',
+  'Pagos': 'ti-credit-card',
+  'Firma electrónica': 'ti-signature',
+  'Uso del sistema': 'ti-activity',
 };
+const ICONO_DERECHO: Record<string, string> = {
+  'Acceso': 'ti-eye', 'Rectificación': 'ti-pencil', 'Supresión': 'ti-trash',
+  'Oposición': 'ti-hand-stop', 'Portabilidad': 'ti-arrows-exchange', 'Bloqueo': 'ti-lock-pause',
+};
+const ICONO_SEGURIDAD = ['ti-key', 'ti-user-shield', 'ti-clock-shield', 'ti-list-check'];
 
-@Component({ selector: 'app-privacidad', imports: [FormsModule, RouterLink], templateUrl: './privacidad.html', styleUrl: './privacidad.scss' })
-export class Privacidad implements OnInit {
-  politica = signal<any>(null);
-  solicitudes = signal<SolicitudDatos[]>([]);
+/**
+ * Aviso de privacidad. Se usa como página (/privacidad) o como modal en el registro
+ * (con [modal]="true"): ahí emite (cerrar) y (aceptar).
+ */
+@Component({
+  selector: 'app-privacidad',
+  styleUrl: './privacidad.scss',
+  templateUrl: './privacidad.html',
+})
+export class Privacidad {
+  modal = input(false);
+  cerrar = output<void>();
+  aceptar = output<void>();
+
+  politica = signal<Politica | null>(null);
   error = signal('');
-  aviso = signal('');
-  ocupado = signal(false);
-  tipo = 'acceso';
-  detalle = '';
-  readonly tipos = Object.entries(TIPOS);
-  readonly nombreTipo = (t: string) => TIPOS[t] ?? t;
 
-  constructor(public auth: Auth, private http: HttpClient, private api: Tramites) {}
+  readonly secciones = [
+    ['responsable', 'Responsable'], ['datos', 'Datos'], ['finalidades', 'Finalidades'],
+    ['destinatarios', 'Destinatarios'], ['conservacion', 'Conservación'], ['derechos', 'Derechos'], ['seguridad', 'Seguridad'],
+  ];
 
-  get conSesion() { return !!this.auth.currentRole(); }
-  get esAdmin() { return this.auth.currentRole()?.tipo === 'admin'; }
-  get pendienteAceptar() { return this.conSesion && !this.auth.currentRole()?.privacidadAceptada; }
-  private h() { return { headers: new HttpHeaders({ Authorization: `Bearer ${this.auth.token()}` }) }; }
-
-  async ngOnInit() {
-    try { this.politica.set(await firstValueFrom(this.http.get(`${API}/privacidad/politica`))); } catch (e) { this.error.set(mensajeError(e)); }
-    if (this.conSesion) await this.cargarSolicitudes();
+  constructor(private http: HttpClient) {
+    firstValueFrom(this.http.get<Politica>(`${API}/privacidad/politica`))
+      .then(p => this.politica.set(p))
+      .catch(() => this.error.set('No se pudo cargar el aviso de privacidad. Intenta de nuevo en unos minutos.'));
   }
 
-  async cargarSolicitudes() {
-    try { this.solicitudes.set((await firstValueFrom(this.api.getSolicitudesDatos(this.esAdmin))).items); } catch (e) { this.error.set(mensajeError(e)); }
+  iconoDato(categoria: string) { return ICONO_DATO[categoria] ?? 'ti-database'; }
+  iconoDerecho(derecho: string) { return ICONO_DERECHO[derecho] ?? 'ti-scale'; }
+  iconoSeguridad(i: number) { return ICONO_SEGURIDAD[i] ?? 'ti-shield-check'; }
+
+  /** Etiqueta de dónde está el destinatario: true = fuera de Chile, false = Chile, null = depende del proveedor. */
+  ubicacion(d: Politica['destinatarios'][number]) {
+    if (d.fuera_de_chile === true) return { texto: 'Fuera de Chile', aviso: true };
+    if (d.fuera_de_chile === null) return { texto: 'Por definir', aviso: true };
+    return { texto: d.quien.startsWith('Ejecutivos') ? 'Interno' : 'Chile', aviso: false };
   }
 
-  private async accion(fn: () => Promise<void>, ok = '') {
-    this.ocupado.set(true); this.error.set(''); this.aviso.set('');
-    try { await fn(); if (ok) this.aviso.set(ok); } catch (e) { this.error.set(mensajeError(e)); } finally { this.ocupado.set(false); }
+  fecha(iso: string) {
+    const [a, m, d] = iso.slice(0, 10).split('-');
+    return `${d}-${m}-${a}`;
   }
 
-  aceptar() { return this.accion(() => this.auth.aceptarPrivacidad(this.politica().version), 'Gracias, registramos que leíste el aviso.'); }
-
-  crear() {
-    return this.accion(async () => {
-      await firstValueFrom(this.api.crearSolicitudDatos(this.tipo, this.detalle));
-      this.detalle = '';
-      await this.cargarSolicitudes();
-    }, 'Recibimos tu solicitud. Te responderemos por escrito dentro del plazo legal.');
-  }
-
-  descargarMisDatos() {
-    return this.accion(async () => {
-      const blob = await firstValueFrom(this.http.get(`${API}/privacidad/mis-datos`, { ...this.h(), responseType: 'blob' }));
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob); a.download = 'mis-datos.json'; a.click();
-      URL.revokeObjectURL(a.href);
-    });
-  }
-
-  abierta = (s: SolicitudDatos) => ['recibida', 'en_proceso'].includes(s.status);
-  tomar(s: SolicitudDatos) { return this.accion(async () => { await firstValueFrom(this.api.resolverSolicitudDatos(s.id, { status: 'en_proceso' })); await this.cargarSolicitudes(); }); }
-  prorrogar(s: SolicitudDatos) {
-    if (!confirm('El plazo se puede prorrogar una sola vez, por hasta 30 días corridos. ¿Prorrogar?')) return;
-    return this.accion(async () => { await firstValueFrom(this.api.resolverSolicitudDatos(s.id, { extend: true })); await this.cargarSolicitudes(); });
-  }
-  cerrar(s: SolicitudDatos, status: 'resuelta' | 'rechazada') {
-    const resolution = prompt(status === 'rechazada' ? 'Fundamenta el rechazo (se le informa al titular):' : 'Describe lo que se hizo (se le informa al titular):');
-    if (!resolution) return;
-    const apply = status === 'resuelta' && s.type === 'supresion' && confirm('¿Anonimizar ahora la cuenta? Se eliminan nombre, correo y RUN; se conservan trámites cerrados, pagos y la evidencia de firma.');
-    return this.accion(async () => { await firstValueFrom(this.api.resolverSolicitudDatos(s.id, { status, resolution, apply })); await this.cargarSolicitudes(); }, 'Solicitud actualizada.');
+  ir(id: string) {
+    document.getElementById('pp-' + id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 }

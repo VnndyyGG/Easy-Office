@@ -1,9 +1,11 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable, map } from 'rxjs';
-import { Auth } from './auth';
-import { environment } from '../environments/environment';
-const API = environment.apiUrl;
+import { Auth, Rol } from './auth';
+
+
+
+const API = 'http://localhost:3000/api';
 
 // ---- Modelos (snake_case = como los devuelve el backend) ----
 export interface Tramite {
@@ -22,8 +24,17 @@ export interface CaseRow {
 }
 export interface DocumentRow { id: number; version: number; content: string; created_at: string; }
 export interface AttachmentRow { id: number; name: string; sha256: string; created_at: string; }
-export interface CaseDetail extends CaseRow { template_id: number | null; prefill: Record<string, string>; documents: DocumentRow[]; attachments: AttachmentRow[]; }
-export interface Servicio { id: number; name: string; price: number; requires_signature: number; signature_level: string; template_id: number | null; }
+export interface CaseDetail extends CaseRow {
+  template_id: number | null; documents: DocumentRow[]; attachments: AttachmentRow[];
+  contract_folio: string | null;     // folio del contrato (LF-0153-2026); lo asigna el backend al generar
+  prefill: Record<string, string>;   // datos del perfil del cliente para los campos de la plantilla (clave del campo → valor)
+}
+/** "Mi perfil" del cliente. RUN y correo son de solo lectura. */
+export interface Perfil {
+  nombre: string; run: string; email: string; telefono: string; domicilio: string; comuna: string; region: string;
+  razonSocial: string; rutEmpresa: string; giro: string; domicilioEmpresa: string;
+}
+export interface Servicio { id: number; name: string; price: number; requires_signature: number; template_id: number | null; }
 
 export type TipoCampo =
   | 'text'
@@ -171,6 +182,10 @@ export class Tramites {
   getPagos() { return this.http.get<{ items: Pago[] }>(`${API}/pagos`, this.h()); }
   getNotificaciones() { return this.http.get<{ items: Notificacion[] }>(`${API}/notificaciones`, this.h()); }
 
+  // ---- Mi perfil ----
+  getPerfil() { return this.http.get<Perfil>(`${API}/perfil`, this.h()); }
+  guardarPerfil(datos: Partial<Perfil>) { return this.http.patch<Perfil & { perfil: Rol }>(`${API}/perfil`, datos, this.h()); }
+
   // ---- Trámite ----
   crearTramite(serviceId: number, details = '') {
     return this.http.post<CaseRow>(`${API}/tramites`, { serviceId, details }, this.h());
@@ -186,6 +201,9 @@ export class Tramites {
     return this.http.post<{ orderId: number; url: string; token: string; total: number }>(`${API}/carrito/pagar`, { caseIds, coupon }, this.h());
   }
   getOrden(id: number) { return this.http.get<Orden>(`${API}/ordenes/${id}`, this.h()); }
+  asignarFolioContrato(id: number, sucursal: string) {
+    return this.http.post<{ folio: string }>(`${API}/tramites/${id}/folio-contrato`, { sucursal }, this.h());
+  }
   guardarDocumento(id: number, content: string, expectedVersion: number) {
     return this.http.post<DocumentRow>(`${API}/tramites/${id}/documentos`, { content, expectedVersion }, this.h());
   }

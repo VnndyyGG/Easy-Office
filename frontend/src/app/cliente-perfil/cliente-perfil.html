@@ -1,0 +1,144 @@
+<button class="btn-ghost volver" routerLink="/cliente">← Volver a mis trámites</button>
+
+<div class="page-head">
+  <div>
+    <h1>Mi perfil</h1>
+    <p>Guarda tus datos una vez y úsalos para rellenar tus trámites. En cada trámite eliges si se usan o no.</p>
+  </div>
+</div>
+
+@if (cargando()) {
+<p class="muted">Cargando tu perfil...</p>
+} @else {
+<div class="perfil">
+  <form class="col" (ngSubmit)="guardar()">
+    <section class="tarjeta">
+      <header>
+        <span class="ico"><i class="ti ti-user"></i></span>
+        <div>
+          <h2>Datos personales</h2>
+          <p>Se usan en los contratos donde firmas como persona o representante.</p>
+        </div>
+      </header>
+      <div class="form-grid">
+        <div class="field full">
+          <label for="p-nombre">Nombre completo</label>
+          <input id="p-nombre" name="nombre" [ngModel]="datos().nombre" (ngModelChange)="set('nombre', $event)" autocomplete="name">
+        </div>
+        <div class="field">
+          <label for="p-run">RUN</label>
+          <input id="p-run" [value]="run()" readonly class="fijo">
+        </div>
+        <div class="field">
+          <label for="p-email">Correo electrónico</label>
+          <input id="p-email" [value]="datos().email" readonly class="fijo">
+        </div>
+        <div class="field">
+          <label for="p-tel">Teléfono celular</label>
+          <input id="p-tel" name="telefono" type="tel" placeholder="+56 9 1234 5678" autocomplete="tel"
+                 [ngModel]="datos().telefono" (ngModelChange)="set('telefono', $event)">
+        </div>
+        <div class="field full">
+          <label for="p-dom">Domicilio</label>
+          <div class="autocompletar">
+            <input id="p-dom" name="domicilio" placeholder="Escribe calle y número…" autocomplete="off"
+                   [ngModel]="datos().domicilio" (ngModelChange)="escribirDireccion('domicilio', $event)"
+                   (blur)="sugerencias.set(null)" (keydown.escape)="sugerencias.set(null)">
+            @if (sugerencias()?.campo === 'domicilio' && sugerencias()!.items.length) {
+              <ul class="sugerencias" role="listbox">
+                @for (s of sugerencias()!.items; track s.etiqueta) {
+                  <!-- mousedown (no click): se ejecuta antes del blur que cierra la lista -->
+                  <li role="option" (mousedown)="$event.preventDefault(); elegirDireccion('domicilio', s)">{{ s.direccion }}<span class="muted">, {{ comunaDe(s) ?? s.lugares[0] }}</span></li>
+                }
+              </ul>
+            }
+          </div>
+          <span class="muted ayuda">Elige una sugerencia (se completan comuna y región) y agrega depto. u oficina si corresponde.</span>
+        </div>
+        <div class="field">
+          <label for="p-region">Región</label>
+          <select id="p-region" name="region" [ngModel]="datos().region" (ngModelChange)="setRegion($event)">
+            <option value="">Selecciona tu región…</option>
+            @for (r of regiones; track r.nombre) { <option [value]="r.nombre">{{ r.nombre }}</option> }
+          </select>
+        </div>
+        <div class="field">
+          <label for="p-comuna">Comuna</label>
+          <select id="p-comuna" name="comuna" [ngModel]="datos().comuna" (ngModelChange)="set('comuna', $event)" [disabled]="!datos().region">
+            <option value="">{{ datos().region ? 'Selecciona tu comuna…' : 'Primero elige la región' }}</option>
+            @for (c of comunas(); track c) { <option [value]="c">{{ c }}</option> }
+          </select>
+        </div>
+      </div>
+    </section>
+
+    <section class="tarjeta">
+      <header>
+        <span class="ico"><i class="ti ti-building"></i></span>
+        <div>
+          <h2>Mi empresa <span class="opcional">opcional</span></h2>
+          <p>Complétalo si contratas a nombre de una empresa (domicilio tributario, oficina, bodega).</p>
+        </div>
+      </header>
+      <div class="form-grid">
+        <div class="field full">
+          <label for="p-rs">Razón social</label>
+          <input id="p-rs" name="razonSocial" placeholder="Mi Empresa SpA" autocomplete="organization"
+                 [ngModel]="datos().razonSocial" (ngModelChange)="set('razonSocial', $event)">
+        </div>
+        <div class="field">
+          <label for="p-rut">RUT de la empresa</label>
+          <input id="p-rut" name="rutEmpresa" placeholder="76.123.456-7" maxlength="12"
+                 [ngModel]="datos().rutEmpresa" (ngModelChange)="setRutEmpresa($event)">
+        </div>
+        <div class="field">
+          <label for="p-giro">Giro</label>
+          <input id="p-giro" name="giro" placeholder="Asesorías y consultorías"
+                 [ngModel]="datos().giro" (ngModelChange)="set('giro', $event)">
+        </div>
+        <div class="field full">
+          <label for="p-domemp">Domicilio de la empresa</label>
+          <div class="autocompletar">
+            <input id="p-domemp" name="domicilioEmpresa" placeholder="Escribe calle y número…" autocomplete="off"
+                   [ngModel]="datos().domicilioEmpresa" (ngModelChange)="escribirDireccion('domicilioEmpresa', $event)"
+                   (blur)="sugerencias.set(null)" (keydown.escape)="sugerencias.set(null)">
+            @if (sugerencias()?.campo === 'domicilioEmpresa' && sugerencias()!.items.length) {
+              <ul class="sugerencias" role="listbox">
+                @for (s of sugerencias()!.items; track s.etiqueta) {
+                  <li role="option" (mousedown)="$event.preventDefault(); elegirDireccion('domicilioEmpresa', s)">{{ s.direccion }}<span class="muted">, {{ comunaDe(s) ?? s.lugares[0] }}</span></li>
+                }
+              </ul>
+            }
+          </div>
+        </div>
+      </div>
+    </section>
+
+    @if (error()) { <p class="login-error" role="alert">{{ error() }}</p> }
+    @if (aviso()) { <p class="ok" role="status"><i class="ti ti-circle-check"></i> {{ aviso() }}</p> }
+
+    <div class="acciones">
+      <button type="submit" class="btn-primary" [disabled]="guardando() || !cambios()">
+        {{ guardando() ? 'Guardando...' : 'Guardar cambios' }}
+      </button>
+    </div>
+  </form>
+
+  <aside class="col-lado">
+    <div class="tarjeta resumen">
+      <span class="ico grande"><i class="ti ti-wand"></i></span>
+      <h3>Autocompletado de trámites</h3>
+      <p>Cuando abras un trámite te preguntaremos si quieres rellenarlo con estos datos. Si prefieres, lo llenas tú a mano.</p>
+      <div class="barra" [attr.aria-label]="completos() + ' de 4 datos de contacto completos'">
+        <span [style.width.%]="completos() * 25"></span>
+      </div>
+      <small>{{ completos() }} de 4 datos de contacto completos</small>
+    </div>
+    <div class="tarjeta nota">
+      <i class="ti ti-shield-lock"></i>
+      <p>Tus datos se usan solo para tus trámites. Puedes cambiarlos o borrarlos cuando quieras.
+        <a routerLink="/privacidad">Ver aviso de privacidad</a></p>
+    </div>
+  </aside>
+</div>
+}

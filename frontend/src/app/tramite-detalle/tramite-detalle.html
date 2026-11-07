@@ -45,45 +45,54 @@
 <!-- ===== Panel de acción según el estado ===== -->
 @switch (estado()) {
 
-@case ('pendiente_pago') {
-<section class="panel listo-pago">
-  <div class="listo-head">
-    <span class="listo-icon" aria-hidden="true">✓</span>
-    <div>
-      <h2>Tu documento está listo</h2>
-      <p>Último paso: paga para enviarlo a revisión. Todavía no se te ha cobrado nada.</p>
-    </div>
-  </div>
+    @case ('pendiente_pago') {
+      <div class="formulario pago">
+        <div class="col">
+          <section class="tarjeta">
+            <header>
+              <span class="ico"><i class="ti ti-circle-check"></i></span>
+              <div>
+                <h2>Tu documento está listo</h2>
+                <p>Último paso: paga para enviarlo a revisión. Todavía no se te ha cobrado nada.</p>
+              </div>
+            </header>
+            <ul class="beneficios">
+              <li><i class="ti ti-shield-lock"></i><span>Pago seguro con Webpay (Transbank): no guardamos los datos de tu tarjeta.</span></li>
+              <li><i class="ti ti-shopping-cart"></i><span>Puedes pagar varios trámites juntos en el carrito.</span></li>
+              <li><i class="ti ti-discount"></i><span>Si tienes un cupón de descuento, lo aplicas en el carrito antes de pagar.</span></li>
+            </ul>
+            @if (!caps()?.payments?.webpay) { <p class="notice warn">Webpay no está disponible por ahora. Intenta más tarde.</p> }
+          </section>
 
-  <div class="resumen">
-    <div class="resumen-fila"><span class="muted">Trámite</span><span>{{ t.service_name }}</span></div>
-    <div class="resumen-fila"><span class="muted">Folio</span><span class="folio">{{ t.folio }}</span></div>
-    <div class="resumen-fila total"><span>Valor</span><span>{{ clp(t.amount) }}</span></div>
-  </div>
+          @if (t.documents[0]; as doc) {
+            <section class="tarjeta">
+              <details class="ver-doc">
+                <summary><i class="ti ti-file-text"></i> Ver el documento (v{{ doc.version }})</summary>
+                <pre class="preview">{{ doc.content }}</pre>
+              </details>
+            </section>
+          }
 
-  <ul class="beneficios">
-    <li>Pago seguro con Webpay (Transbank): no guardamos los datos de tu tarjeta.</li>
-    <li>Puedes pagar varios trámites juntos en el carrito.</li>
-    <li>Si tienes un cupón de descuento, lo aplicas en el carrito antes de pagar.</li>
-  </ul>
+          <div class="acciones">
+            <button class="btn-ghost cancelar" [disabled]="ocupado()" (click)="cancelar()">Cancelar trámite</button>
+            <button class="btn-ghost" [disabled]="ocupado()" (click)="volverAEditar()">← Volver a editar</button>
+            <button class="btn-primary" [disabled]="ocupado() || !caps()?.payments?.webpay" (click)="irAlCarrito()">Ir al carrito y pagar</button>
+          </div>
+        </div>
 
-  @if (!caps()?.payments?.webpay) { <p class="notice warn">Webpay no está disponible por ahora. Intenta más tarde.</p> }
-
-  <div class="acciones">
-    <button class="btn-primary" [disabled]="ocupado() || !caps()?.payments?.webpay" (click)="irAlCarrito()">Ir al
-      carrito y pagar</button>
-    <button class="btn-ghost" [disabled]="ocupado()" (click)="volverAEditar()">← Volver a editar el documento</button>
-    <button class="btn-ghost cancelar" [disabled]="ocupado()" (click)="cancelar()">Cancelar trámite</button>
-  </div>
-
-  @if (t.documents[0]; as doc) {
-  <details class="muted">
-    <summary>Ver el documento (v{{ doc.version }})</summary>
-    <pre class="preview">{{ doc.content }}</pre>
-  </details>
-  }
-</section>
-}
+        <aside class="col-lado">
+          <div class="tarjeta detalle-pago">
+            <h3>Resumen</h3>
+            <dl>
+              <div><dt>Trámite</dt><dd>{{ t.service_name }}</dd></div>
+              <div><dt>Folio</dt><dd class="folio">{{ t.folio }}</dd></div>
+              @if (t.contract_folio) { <div><dt>N.º de contrato</dt><dd class="folio">{{ t.contract_folio }}</dd></div> }
+            </dl>
+            <div class="total"><span>Total a pagar</span><strong>{{ clp(t.amount) }}</strong></div>
+          </div>
+        </aside>
+      </div>
+    }
 
 @case ('borrador') { <ng-container *ngTemplateOutlet="editor" /> }
 @case ('en_redaccion') { <ng-container *ngTemplateOutlet="editor" /> }
@@ -260,205 +269,258 @@
 </section>
 }
 
-<!-- ===== Datos del documento (redacción / observado) ===== -->
-<ng-template #editor>
-  <section class="panel">
+  <!-- ===== Datos del documento (redacción / observado) ===== -->
+  <ng-template #editor>
     @if (primeraRedaccion()) {
-    <h2>Completa los datos de tu documento</h2>
-    <p>Llena los datos y genera el documento. Después podrás leerlo y editarlo directamente. Todavía no se te cobra
-      nada.</p>
-    @if (!t.template_id) {
-    <div class="field full">
-      <label for="plantilla">Documento</label>
-      <select id="plantilla" [ngModel]="plantillaId()?.toString() ?? ''" (ngModelChange)="cambiarPlantilla($event)">
-        <option value="">Selecciona un documento…</option>
-        @for (g of grupos(); track g.label) {
-        <optgroup [label]="g.label">
-          @for (p of g.items; track p.id) { <option [value]="p.id">{{ p.name }}</option> }
-        </optgroup>
-        }
-      </select>
-      @if (plantillaSel()?.description) { <p class="muted">{{ plantillaSel()!.description }}</p> }
-    </div>
-    }
-    @if (plantillaSel()) {
-
-    @if (hayPrefill()) {
-    <p class="muted aviso-prefill">
-      Algunos campos se completaron automáticamente con los datos del titular
-      de la cuenta. Puedes revisarlos y modificarlos antes de generar el documento.
-    </p>
-    }
-
-    @for (s of secciones(); track s.titulo) {
-
-    <h3>{{ s.titulo }}</h3>
-    @if (s.titulo === 'Sucursal') {
-    <div class="field full">
-      <label for="sucursal">Sucursal de Easy Office</label>
-      <select id="sucursal" [ngModel]="sucursalElegida()" (ngModelChange)="elegirSucursal($event)">
-        <option value="" disabled>Selecciona la sucursal…</option>
-        @for (su of sucursales; track su.sigla) { <option [value]="su.sigla">{{ su.nombre }}</option> }
-      </select>
-    </div>
-    }
-    <div class="form-grid">
-      @for (c of s.campos; track c.key) {
-      <div class="field" [class.full]="c.type === 'textarea'">
-        <label [attr.for]="'c-' + c.key">{{ c.label }}@if (!c.required) { <span class="muted"> (opcional)</span>
-          }</label>
-        @if (esCampoSucursal(c)) {
-        <input [id]="'c-' + c.key" [value]="valores()[c.key] ?? ''" readonly class="fijo">
-        } @else if (esCampoFecha(c)) {
-        <input [id]="'c-' + c.key" type="date" [ngModel]="fechaIso(valores()[c.key] ?? '')"
-          (ngModelChange)="setFecha(c.key, $event)">
-        } @else if (esDireccion(c)) {
-        <div class="autocompletar">
-          <input [id]="'c-' + c.key" autocomplete="off" [placeholder]="c.placeholder ?? 'Escribe calle y número…'"
-            [ngModel]="valores()[c.key] ?? ''" (ngModelChange)="escribirDireccion(c.key, $event)"
-            (blur)="sugerencias.set(null)" (keydown.escape)="sugerencias.set(null)">
-          @if (sugerencias()?.key === c.key && sugerencias()!.items.length) {
-          <ul class="sugerencias" role="listbox">
-            @for (s of sugerencias()!.items; track s.etiqueta) {
-            <!-- mousedown (no click): se ejecuta antes del blur que cierra la lista -->
-            <li role="option" (mousedown)="$event.preventDefault(); elegirDireccion(c.key, s)">{{ s.direccion }}<span
-                class="muted">, {{ comunaDe(s) ?? s.lugares[0] }}</span></li>
+    <div class="formulario">
+      <div class="col">
+        <section class="tarjeta">
+          <header>
+            <span class="ico"><i class="ti ti-file-pencil"></i></span>
+            <div>
+              <h2>Completa los datos de tu documento</h2>
+              <p>Llena los datos y genera el documento. Después podrás leerlo y editarlo. Todavía no se te cobra nada.</p>
+            </div>
+          </header>
+          @if (!t.template_id) {
+          <div class="field full">
+            <label for="plantilla">Documento</label>
+            <select id="plantilla" [ngModel]="plantillaId()?.toString() ?? ''" (ngModelChange)="cambiarPlantilla($event)">
+              <option value="">Selecciona un documento…</option>
+              @for (g of grupos(); track g.label) {
+                <optgroup [label]="g.label">
+                  @for (p of g.items; track p.id) { <option [value]="p.id">{{ p.name }}</option> }
+                </optgroup>
+              }
+            </select>
+            @if (plantillaSel()?.description) { <p class="muted">{{ plantillaSel()!.description }}</p> }
+          </div>
+          } @else if (plantillaSel()?.description) {
+            <p class="muted descripcion">{{ plantillaSel()!.description }}</p>
+          }
+        </section>
+        @if (plantillaSel()) {
+          @if (ofertaPerfil()) {
+            <div class="oferta-perfil">
+              <span class="ico"><i class="ti ti-wand"></i></span>
+              <div class="texto">
+                <strong>¿Rellenamos este formulario con los datos de tu perfil?</strong>
+                <span>Completaremos {{ camposPerfil().length }} campos: {{ etiquetasPerfil() }}. Podrás revisarlos y cambiarlos antes de enviar.</span>
+              </div>
+              <div class="botones">
+                <button type="button" class="btn-ghost" (click)="usoPerfil.set('no')">No, lo lleno yo</button>
+                <button type="button" class="btn-primary" (click)="usarPerfil()">Sí, usar mis datos</button>
+              </div>
+            </div>
+          } @else if (usoPerfil() === 'si') {
+            <p class="notice ok"><i class="ti ti-circle-check"></i> Rellenamos {{ rellenadosPerfil() }} campos con tu perfil. Revísalos antes de continuar.</p>
+          }
+          @for (s of secciones(); track s.titulo) {
+          <section class="tarjeta">
+            <header>
+              <span class="ico"><i class="ti" [class]="'ti-' + iconoSeccion(s.titulo)"></i></span>
+              <div>
+                <h2>{{ s.titulo }}</h2>
+                <p>{{ s.campos.length }} {{ s.campos.length === 1 ? 'dato' : 'datos' }}</p>
+              </div>
+            </header>
+            @if (s.titulo === 'Sucursal') {
+              <div class="field full">
+                <label for="sucursal">Sucursal de Easy Office</label>
+                <select id="sucursal" [ngModel]="sucursalElegida()" (ngModelChange)="elegirSucursal($event)">
+                  <option value="" disabled>Selecciona la sucursal…</option>
+                  @for (su of sucursales; track su.sigla) { <option [value]="su.sigla">{{ su.nombre }}</option> }
+                </select>
+              </div>
             }
-          </ul>
+            <div class="form-grid">
+              @for (c of s.campos; track c.key) {
+                <div class="field" [class.full]="c.type === 'textarea'">
+                  <label [attr.for]="'c-' + c.key">{{ c.label }}@if (!c.required) { <span class="muted"> (opcional)</span> }</label>
+                  @if (esCampoFolio(c)) {
+                    <input [id]="'c-' + c.key" [value]="t.contract_folio ?? ''" readonly class="fijo" placeholder="Se asigna al generar el documento">
+                    <span class="muted ayuda">Lo asigna Easy Office: sucursal, número correlativo y año.</span>
+                  } @else if (esCampoSucursal(c)) {
+                    <input [id]="'c-' + c.key" [value]="valores()[c.key] ?? ''" readonly class="fijo">
+                  } @else if (esCampoFecha(c)) {
+                    <input [id]="'c-' + c.key" type="date" [ngModel]="fechaIso(valores()[c.key] ?? '')" (ngModelChange)="setFecha(c.key, $event)">
+                  } @else if (esDireccion(c)) {
+                    <div class="autocompletar">
+                      <input [id]="'c-' + c.key" autocomplete="off" [placeholder]="c.placeholder ?? 'Escribe calle y número…'"
+                             [ngModel]="valores()[c.key] ?? ''" (ngModelChange)="escribirDireccion(c.key, $event)"
+                             (blur)="sugerencias.set(null)" (keydown.escape)="sugerencias.set(null)">
+                      @if (sugerencias()?.key === c.key && sugerencias()!.items.length) {
+                        <ul class="sugerencias" role="listbox">
+                          @for (s of sugerencias()!.items; track s.etiqueta) {
+                            <!-- mousedown (no click): se ejecuta antes del blur que cierra la lista -->
+                            <li role="option" (mousedown)="$event.preventDefault(); elegirDireccion(c.key, s)">{{ s.direccion }}<span class="muted">, {{ comunaDe(s) ?? s.lugares[0] }}</span></li>
+                          }
+                        </ul>
+                      }
+                    </div>
+                    <span class="muted ayuda">Elige una sugerencia y agrega depto. u oficina si corresponde.</span>
+                  } @else if (vehiculo(c) === 'marca') {
+                    <select [id]="'c-' + c.key" [ngModel]="valores()[c.key] ?? ''" (ngModelChange)="setMarca($event)">
+                      <option value="">Selecciona la marca…</option>
+                      @if (marcaFueraDeLista()) { <option [value]="valores()[c.key]">{{ valores()[c.key] }}</option> }
+                      @for (m of marcas; track m.nombre) { <option [value]="mayus(m.nombre)">{{ m.nombre }}</option> }
+                    </select>
+                  } @else if (vehiculo(c) === 'modelo') {
+                    <input [id]="'c-' + c.key" list="modelos-sugeridos" autocomplete="off"
+                           [placeholder]="modelosDeMarca().length ? 'Elige o escribe el modelo' : 'Escribe el modelo'"
+                           [ngModel]="valores()[c.key] ?? ''" (ngModelChange)="setValor(c.key, $event)">
+                    <datalist id="modelos-sugeridos">
+                      @for (m of modelosDeMarca(); track m) { <option [value]="mayus(m)">{{ m }}</option> }
+                    </datalist>
+                  } @else if (vehiculo(c) === 'anio') {
+                    <select [id]="'c-' + c.key" [ngModel]="valores()[c.key] ?? ''" (ngModelChange)="setValor(c.key, $event)">
+                      <option value="">Selecciona el año…</option>
+                      @for (a of anios; track a) { <option [value]="a">{{ a }}</option> }
+                    </select>
+                  } @else if (vehiculo(c) === 'patente') {
+                    <input #campoPatente [id]="'c-' + c.key" placeholder="ABCD-12" maxlength="7" autocomplete="off"
+                           [ngModel]="valores()[c.key] ?? ''" (ngModelChange)="setPatente(c.key, $event, campoPatente)">
+                  } @else if (c.key === 'monto') {
+                    <div class="con-signo">
+                      <span>$</span>
+                      <input #campoMonto [id]="'c-' + c.key" inputmode="numeric" placeholder="450.000" autocomplete="off" [ngModel]="valores()[c.key] ?? ''" (ngModelChange)="setMonto(c.key, $event, campoMonto)">
+                    </div>
+                  } @else if (c.type === 'rut') {
+                    <input #campoRut [id]="'c-' + c.key" placeholder="12.345.678-5" maxlength="12" [ngModel]="valores()[c.key] ?? ''" (ngModelChange)="setRut(c.key, $event, campoRut)">
+                  } @else if (ubicacion(c) === 'region') {
+                    <select [id]="'c-' + c.key" [ngModel]="valores()[c.key] ?? ''" (ngModelChange)="setValor(c.key, $event)">
+                      <option value="">Selecciona la región…</option>
+                      @if (fueraDeLista(c)) { <option [value]="valores()[c.key]">{{ valores()[c.key] }}</option> }
+                      @for (r of regiones; track r.nombre) { <option [value]="mayus(r.nombre)">{{ r.nombre }}</option> }
+                    </select>
+                  } @else if (ubicacion(c) === 'comuna') {
+                    <select [id]="'c-' + c.key" [ngModel]="valores()[c.key] ?? ''" (ngModelChange)="setValor(c.key, $event)">
+                      <option value="">Selecciona la comuna…</option>
+                      @if (fueraDeLista(c)) { <option [value]="valores()[c.key]">{{ valores()[c.key] }}</option> }
+                      @for (r of comunasPara(c.key); track r.nombre) {
+                        <optgroup [label]="r.nombre">
+                          @for (x of r.comunas; track x) { <option [value]="mayus(x)">{{ x }}</option> }
+                        </optgroup>
+                      }
+                    </select>
+                  } @else {
+                  @switch (c.type) {
+                    @case ('textarea') {
+                      <textarea [id]="'c-' + c.key" rows="4" [placeholder]="c.placeholder ?? ''" [ngModel]="valores()[c.key] ?? ''" (ngModelChange)="setValor(c.key, $event)"></textarea>
+                    }
+                    @case ('select') {
+                      <select [id]="'c-' + c.key" [ngModel]="valores()[c.key] ?? ''" (ngModelChange)="setValor(c.key, $event)">
+                        <option value="">Selecciona…</option>
+                        @for (o of c.options ?? []; track o) { <option [value]="o">{{ o }}</option> }
+                      </select>
+                    }
+                    @default {
+                      <input [id]="'c-' + c.key" [type]="inputType(c)" [placeholder]="c.placeholder ?? ''" [ngModel]="valores()[c.key] ?? ''" (ngModelChange)="setValor(c.key, $event)">
+                    }
+                  }
+                  }
+                  @if ((c.key === 'fecha_vencimiento' || c.key === 'fecha_termino') && avisoPlazo()) { <p class="notice warn aviso-campo">{{ avisoPlazo() }}</p> }
+                </div>
+              }
+            </div>
+          </section>
           }
-        </div>
-        <span class="muted ayuda">Elige una sugerencia y agrega depto. u oficina si corresponde.</span>
-        } @else if (vehiculo(c) === 'marca') {
-        <select [id]="'c-' + c.key" [ngModel]="valores()[c.key] ?? ''" (ngModelChange)="setMarca($event)">
-          <option value="">Selecciona la marca…</option>
-          @if (marcaFueraDeLista()) { <option [value]="valores()[c.key]">{{ valores()[c.key] }}</option> }
-          @for (m of marcas; track m.nombre) { <option [value]="mayus(m.nombre)">{{ m.nombre }}</option> }
-        </select>
-        } @else if (vehiculo(c) === 'modelo') {
-        <input [id]="'c-' + c.key" list="modelos-sugeridos" autocomplete="off"
-          [placeholder]="modelosDeMarca().length ? 'Elige o escribe el modelo' : 'Escribe el modelo'"
-          [ngModel]="valores()[c.key] ?? ''" (ngModelChange)="setValor(c.key, $event)">
-        <datalist id="modelos-sugeridos">
-          @for (m of modelosDeMarca(); track m) { <option [value]="mayus(m)">{{ m }}</option> }
-        </datalist>
-        } @else if (vehiculo(c) === 'anio') {
-        <select [id]="'c-' + c.key" [ngModel]="valores()[c.key] ?? ''" (ngModelChange)="setValor(c.key, $event)">
-          <option value="">Selecciona el año…</option>
-          @for (a of anios; track a) { <option [value]="a">{{ a }}</option> }
-        </select>
-        } @else if (vehiculo(c) === 'patente') {
-        <input #campoPatente [id]="'c-' + c.key" placeholder="ABCD-12" maxlength="7" autocomplete="off"
-          [ngModel]="valores()[c.key] ?? ''" (ngModelChange)="setPatente(c.key, $event, campoPatente)">
-        } @else if (c.key === 'monto') {
-        <div class="con-signo">
-          <span>$</span>
-          <input #campoMonto [id]="'c-' + c.key" inputmode="numeric" placeholder="450.000" autocomplete="off"
-            [ngModel]="valores()[c.key] ?? ''" (ngModelChange)="setMonto(c.key, $event, campoMonto)">
-        </div>
-        } @else if (c.type === 'rut' || c.type === 'run') {
-        <input #campoRut [id]="'c-' + c.key" placeholder="12.345.678-5" maxlength="12"
-          [ngModel]="valores()[c.key] ?? ''" (ngModelChange)="setRut(c.key, $event, campoRut)">} @else if (ubicacion(c)
-        === 'region') {
-        <select [id]="'c-' + c.key" [ngModel]="valores()[c.key] ?? ''" (ngModelChange)="setValor(c.key, $event)">
-          <option value="">Selecciona la región…</option>
-          @if (fueraDeLista(c)) { <option [value]="valores()[c.key]">{{ valores()[c.key] }}</option> }
-          @for (r of regiones; track r.nombre) { <option [value]="mayus(r.nombre)">{{ r.nombre }}</option> }
-        </select>
-        } @else if (ubicacion(c) === 'comuna') {
-        <select [id]="'c-' + c.key" [ngModel]="valores()[c.key] ?? ''" (ngModelChange)="setValor(c.key, $event)">
-          <option value="">Selecciona la comuna…</option>
-          @if (fueraDeLista(c)) { <option [value]="valores()[c.key]">{{ valores()[c.key] }}</option> }
-          @for (r of comunasPara(c.key); track r.nombre) {
-          <optgroup [label]="r.nombre">
-            @for (x of r.comunas; track x) { <option [value]="mayus(x)">{{ x }}</option> }
-          </optgroup>
+          @if (usaArticulos()) {
+          <section class="tarjeta">
+            <header>
+              <span class="ico"><i class="ti ti-list-numbers"></i></span>
+              <div>
+                <h2>Artículos del acuerdo</h2>
+                <p>Agrega los artículos que necesita tu trámite.</p>
+              </div>
+            </header>
+            <div class="field full">
+              <label for="agregar-art">Agregar artículo según el trámite</label>
+              <select id="agregar-art" #selArt (change)="agregarArticulo(selArt.value); selArt.value = ''">
+                <option value="">Selecciona un artículo…</option>
+                @for (d of plantillaSel()!.clauses; track d.key) { <option [value]="d.key">{{ d.label }}</option> }
+              </select>
+            </div>
+            @for (a of articulos(); track $index; let i = $index) {
+              <div class="articulo">
+                <strong>{{ i + 1 }}. {{ defArticulo(a.key)?.label }}</strong>
+                <button type="button" class="btn-ghost" (click)="quitarArticulo(i)">Quitar</button>
+                <div class="form-grid">
+                  @for (c of defArticulo(a.key)?.fields ?? []; track c.key) {
+                    <div class="field">
+                      <label [attr.for]="'a' + i + '-' + c.key">{{ c.label }}</label>
+                      <input [id]="'a' + i + '-' + c.key" type="text" [ngModel]="a.values[c.key] ?? ''" (ngModelChange)="setValorArticulo(i, c.key, $event)">
+                    </div>
+                  }
+                </div>
+              </div>
+            }
+          </section>
           }
-        </select>
+          <section class="tarjeta">
+            <header>
+              <span class="ico"><i class="ti ti-eye"></i></span>
+              <div>
+                <h2>Vista previa</h2>
+                <p>Así va quedando tu documento con los datos que ingresaste.</p>
+              </div>
+            </header>
+            <pre class="preview">{{ generado() }}</pre>
+          </section>
+        }
+        <div class="acciones">
+          @if (plantillaSel() && faltantes().length) { <span class="muted faltan">Faltan {{ faltantes().length }} campo(s): {{ faltantes().slice(0, 3).join(', ') }}{{ faltantes().length > 3 ? '…' : '' }}</span> }
+          @if (rehacer()) { <button class="btn-ghost" [disabled]="ocupado()" (click)="rehacer.set(false)">Cancelar y mantener mi texto</button> }
+          <button class="btn-primary" [disabled]="ocupado() || !plantillaSel() || !puedeEnviar()" (click)="generarDocumento()">Generar documento</button>
+        </div>
+      </div>
+
+      <aside class="col-lado">
+        @if (plantillaSel()) {
+        <div class="tarjeta resumen">
+          <span class="ico grande"><i class="ti ti-checklist"></i></span>
+          <h3>Avance del formulario</h3>
+          <p>Completa los datos obligatorios para generar tu documento.</p>
+          <div class="barra" [attr.aria-label]="completosObligatorios() + ' de ' + obligatorios() + ' datos obligatorios completos'">
+            <span [style.width.%]="obligatorios() ? completosObligatorios() * 100 / obligatorios() : 100"></span>
+          </div>
+          <small>{{ completosObligatorios() }} de {{ obligatorios() }} datos obligatorios completos</small>
+        </div>
+        }
+        <div class="tarjeta nota">
+          <i class="ti ti-wand"></i>
+          <p>Guarda tus datos en tu perfil y úsalos para rellenar tus próximos trámites.
+            <a routerLink="/cliente/perfil">Ir a mi perfil</a></p>
+        </div>
+        <div class="tarjeta nota">
+          <i class="ti ti-shield-lock"></i>
+          <p>Tus datos se usan solo para tus trámites.
+            <a routerLink="/privacidad">Ver aviso de privacidad</a></p>
+        </div>
+      </aside>
+    </div>
+    } @else {
+    <section class="panel">
+        @if (estado() === 'borrador') {
+          <h2>Revisa y edita tu documento</h2>
+          <p>Este es el texto generado con tus datos. Puedes modificarlo directamente. Cuando esté listo, continúas al pago.</p>
         } @else {
-        @switch (c.type) {
-        @case ('textarea') {
-        <textarea [id]="'c-' + c.key" rows="4" [placeholder]="c.placeholder ?? ''" [ngModel]="valores()[c.key] ?? ''"
-          (ngModelChange)="setValor(c.key, $event)"></textarea>
+          <h2>Corrige tu documento</h2>
         }
-        @case ('select') {
-        <select [id]="'c-' + c.key" [ngModel]="valores()[c.key] ?? ''" (ngModelChange)="setValor(c.key, $event)">
-          <option value="">Selecciona…</option>
-          @for (o of c.options ?? []; track o) { <option [value]="o">{{ o }}</option> }
-        </select>
-        }
-        @default {
-        <input [id]="'c-' + c.key" [type]="inputType(c)" [placeholder]="c.placeholder ?? ''"
-          [ngModel]="valores()[c.key] ?? ''" (ngModelChange)="setValor(c.key, $event)">
-        }
-        }
-        }
-        @if ((c.key === 'fecha_vencimiento' || c.key === 'fecha_termino') && avisoPlazo()) { <p
-          class="notice warn aviso-campo">{{ avisoPlazo() }}</p> }
-      </div>
-      }
-    </div>
-    }
-    @if (usaArticulos()) {
-    <h3>Artículos del acuerdo</h3>
-    <div class="field full">
-      <label for="agregar-art">Agregar artículo según el trámite</label>
-      <select id="agregar-art" #selArt (change)="agregarArticulo(selArt.value); selArt.value = ''">
-        <option value="">Selecciona un artículo…</option>
-        @for (d of plantillaSel()!.clauses; track d.key) { <option [value]="d.key">{{ d.label }}</option> }
-      </select>
-    </div>
-    @for (a of articulos(); track $index; let i = $index) {
-    <div class="articulo">
-      <strong>{{ i + 1 }}. {{ defArticulo(a.key)?.label }}</strong>
-      <button type="button" class="btn-ghost" (click)="quitarArticulo(i)">Quitar</button>
-      <div class="form-grid">
-        @for (c of defArticulo(a.key)?.fields ?? []; track c.key) {
-        <div class="field">
-          <label [attr.for]="'a' + i + '-' + c.key">{{ c.label }}</label>
-          <input [id]="'a' + i + '-' + c.key" type="text" [ngModel]="a.values[c.key] ?? ''"
-            (ngModelChange)="setValorArticulo(i, c.key, $event)">
+        <div class="field full">
+          <label for="contenido">Contenido (texto plano) · versión guardada: v{{ ultimaVersion() }}</label>
+          <textarea id="contenido" rows="16" [ngModel]="contenido()" (ngModelChange)="editarTexto($event)"></textarea>
         </div>
-        }
-      </div>
-    </div>
+        <div class="acciones">
+          <button class="btn-ghost" [disabled]="ocupado() || !puedeEnviar() || !hayCambiosSinGuardar()" (click)="guardar()">Guardar borrador</button>
+          @if (estado() === 'borrador') {
+            <button class="btn-ghost" [disabled]="ocupado()" (click)="reabrirFormulario()">Volver al formulario</button>
+            <button class="btn-primary" [disabled]="ocupado() || !puedeEnviar()" (click)="continuarAlPago()">Continuar al pago</button>
+          } @else {
+            <button class="btn-primary" [disabled]="ocupado() || !puedeEnviar()" (click)="enviarARevision()">Enviar a revisión</button>
+          }
+        </div>
+    </section>
     }
-    }
-    <h3>Vista previa</h3>
-    <pre class="preview">{{ generado() }}</pre>
-    }
-    <div class="acciones">
-      <button class="btn-primary" [disabled]="ocupado() || !plantillaSel() || !puedeEnviar()"
-        (click)="generarDocumento()">Generar documento</button>
-      @if (rehacer()) { <button class="btn-ghost" [disabled]="ocupado()" (click)="rehacer.set(false)">Cancelar y
-        mantener mi texto</button> }
-      @if (plantillaSel() && faltantes().length) { <span class="muted">Faltan {{ faltantes().length }} campo(s): {{
-        faltantes().slice(0, 3).join(', ') }}{{ faltantes().length > 3 ? '…' : '' }}</span> }
-    </div>
-    } @else {
-    @if (estado() === 'borrador') {
-    <h2>Revisa y edita tu documento</h2>
-    <p>Este es el texto generado con tus datos. Puedes modificarlo directamente. Cuando esté listo, continúas al pago.
-    </p>
-    } @else {
-    <h2>Corrige tu documento</h2>
-    }
-    <div class="field full">
-      <label for="contenido">Contenido (texto plano) · versión guardada: v{{ ultimaVersion() }}</label>
-      <textarea id="contenido" rows="16" [ngModel]="contenido()" (ngModelChange)="editarTexto($event)"></textarea>
-    </div>
-    <div class="acciones">
-      <button class="btn-ghost" [disabled]="ocupado() || !puedeEnviar() || !hayCambiosSinGuardar()"
-        (click)="guardar()">Guardar borrador</button>
-      @if (estado() === 'borrador') {
-      <button class="btn-ghost" [disabled]="ocupado()" (click)="reabrirFormulario()">Volver al formulario</button>
-      <button class="btn-primary" [disabled]="ocupado() || !puedeEnviar()" (click)="continuarAlPago()">Continuar al
-        pago</button>
-      } @else {
-      <button class="btn-primary" [disabled]="ocupado() || !puedeEnviar()" (click)="enviarARevision()">Enviar a
-        revisión</button>
-      }
-    </div>
-    }
-  </section>
-</ng-template>
+  </ng-template>
 }
