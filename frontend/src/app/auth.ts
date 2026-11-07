@@ -7,7 +7,7 @@ export interface Rol {
   id: number;
   name: string;
   email: string;
-  run: string;
+  rut: string;
   role: string;
   initials: string;
   avatarBg: string;

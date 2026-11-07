@@ -94,9 +94,9 @@
         <form class="login-form" (ngSubmit)="onRegister()">
           <div class="field">
             <label for="reg-run">RUN</label>
-            <input id="reg-run" type="text" name="run" [ngModel]="run" (ngModelChange)="onRunChange($event)" required
+            <input id="reg-run" type="text" name="run" [ngModel]="rut" (ngModelChange)="onRutChange($event)" required
               maxlength="12" autocomplete="off" placeholder="12.345.678-9">
-            @if (!runValido()) {
+            @if (!rutValido()) {
             <small class="field-error">RUN inválido, revisa el dígito verificador.</small>
             }
           </div>

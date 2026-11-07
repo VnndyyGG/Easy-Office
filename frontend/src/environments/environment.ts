@@ -1,4 +1,4 @@
 export const environment = {
   production: true,
-  apiUrl: 'https://sweet-pithivier-861ead.netlify.app'
+  apiUrl: 'https://easy-office-production-a543.up.railway.app/api'
 };
