@@ -87,9 +87,7 @@
             <pre class="doc-preview">{{ d.content }}</pre>
             <div class="enlaces">
               <button class="row-action" (click)="bajarDocumento(d.id, d.version)">Descargar PDF</button>
-              @for (a of t.attachments; track a.id) {
-                <button class="row-action" (click)="bajarAdjunto(a.id, a.name)">Adjunto: {{ a.name }}</button>
-              }
+              
             </div>
             @if (t.documents.length > 1) {
               <details class="versiones">
@@ -135,6 +133,7 @@
   }
 
   @if (activeTab() === 'todos') {
+    <div class="tabla">
     <table>
       <thead>
         <tr><th>Folio</th><th>Cliente</th><th>Documento</th><th>Actualizado</th><th>Estado</th><th></th></tr>
@@ -154,6 +153,7 @@
         }
       </tbody>
     </table>
+    </div>
   }
 
   @if (activeTab() === 'clientes') {

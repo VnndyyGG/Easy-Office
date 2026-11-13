@@ -1,1 +1,10 @@
 .head-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.doc-grid { margin-bottom: 0; }
+.acciones-fin { display: flex; justify-content: flex-end; margin-top: 16px; }
+
+.vacio {
+  display: grid; justify-items: center; gap: 8px; text-align: center; padding: 36px 22px;
+
+  h2 { margin: 6px 0 0; font-size: 18px; }
+  p { margin: 0 0 8px; font-size: 13.5px; color: var(--ink-soft); }
+}

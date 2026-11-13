@@ -204,9 +204,7 @@ export class Tramites {
   guardarDocumento(id: number, content: string, expectedVersion: number) {
     return this.http.post<DocumentRow>(`${API}/tramites/${id}/documentos`, { content, expectedVersion }, this.h());
   }
-  subirAdjunto(id: number, name: string, base64: string) {
-    return this.http.post<{ id: number; name: string }>(`${API}/tramites/${id}/adjuntos`, { name, base64 }, this.h());
-  }
+
 
 
   // ---- Ejecutivo comercial: el backend ya filtra a sus trámites asignados ----

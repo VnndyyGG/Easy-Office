@@ -933,3 +933,84 @@ section.perm-note {
 
   
 }
+
+
+#app-shell { background: var(--surface); min-height: 100vh; }
+header.nav { background: var(--white); }
+.breadcrumb { background: transparent; border-bottom: 0; padding-top: 16px; padding-bottom: 0; }
+.page-head h1 { font-size: 26px; }
+
+// Tarjetas
+.tarjeta,
+.panel {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 20px 22px;
+  min-width: 0;
+}
+.panel { margin: 0 0 16px; }
+.panel h2 { margin: 0 0 8px; font-size: 17px; }
+.panel h3 { margin: 0 0 10px; font-size: 15px; }
+.tarjeta > header { display: flex; gap: 14px; align-items: flex-start; margin-bottom: 16px; }
+.tarjeta > header h2 { margin: 0; font-size: 17px; }
+.tarjeta > header p { margin: 2px 0 0; font-size: 13px; color: var(--ink-soft); }
+.stack { display: grid; gap: 16px; }
+
+// Ícono en cuadro verde
+.ico {
+  width: 38px; height: 38px; flex: none; border-radius: 11px;
+  display: grid; place-items: center;
+  background: var(--green-bg); color: var(--green-2); font-size: 20px;
+}
+.ico.grande { width: 46px; height: 46px; font-size: 24px; border-radius: 13px; }
+
+// Píldoras
+.pill {
+  display: inline-block; font-size: 12px; font-weight: 500;
+  padding: 3px 10px; border-radius: 999px; white-space: nowrap;
+}
+.pill.ok { background: var(--green-bg); color: var(--green-2); }
+.pill.wa { background: var(--amber-bg); color: var(--amber); }
+
+// Tabs en forma de píldora (igual que la navegación de Privacidad)
+.tabs { gap: 6px; border-bottom: 0; margin-bottom: 20px; }
+.tab {
+  margin: 0; padding: 7px 14px;
+  border: 1px solid var(--border); border-radius: 999px;
+  background: var(--white); color: var(--ink);
+  font-size: 13.5px; font-weight: 500;
+  transition: border-color .15s, color .15s;
+}
+.tab:hover { border-color: var(--green-2); color: var(--green-2); }
+.tab.active { background: var(--green-bg); border-color: var(--green-2); color: var(--green-2); font-weight: 600; }
+
+// Botones
+.btn-primary,
+.btn-ghost {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  min-height: 42px; border-radius: 10px;
+  transition: box-shadow .15s, border-color .15s, color .15s, opacity .15s;
+}
+.btn-ghost { background: var(--white); }
+.btn-primary:hover:not(:disabled) { box-shadow: 0 4px 12px rgba(21, 128, 61, .25); }
+.btn-ghost:hover:not(:disabled) { border-color: var(--green-2); color: var(--green-2); }
+.btn-primary:disabled,
+.btn-ghost:disabled { opacity: .6; cursor: not-allowed; }
+.btn-primary.chico,
+.btn-ghost.chico { min-height: 0; padding: 6px 12px; font-size: 13px; border-radius: 9px; }
+
+// Tablas dentro de una tarjeta
+thead th { background: var(--surface); padding: 11px 14px; }
+.tabla {
+  background: var(--white); border: 1px solid var(--border);
+  border-radius: 14px; overflow-x: auto;
+}
+.tabla tbody tr:last-child td,
+.panel tbody tr:last-child td { border-bottom: 0; }
+
+// Servicios y KPIs
+.doc-card { background: var(--white); border-radius: 14px; padding: 16px 18px; transition: border-color .15s, box-shadow .15s; }
+.doc-card:hover { box-shadow: 0 4px 14px rgba(20, 24, 26, .06); }
+.doc-card.selected { background: var(--green-bg); box-shadow: none; }
+.kpi-card { background: var(--white); border-radius: 14px; }

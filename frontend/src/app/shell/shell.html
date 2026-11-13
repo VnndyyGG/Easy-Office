@@ -26,14 +26,13 @@
   <div class="breadcrumb">
     Inicio &nbsp;›&nbsp; Firmas Electrónicas &nbsp;›&nbsp; <span class="current">{{ auth.currentRole()?.crumb }}</span>
   </div>
-  @if (auth.currentRole() && !auth.currentRole()?.privacidadAceptada) {
-  <div class="aviso-privacidad" role="alert"
-    style="background:#fef3e2;color:#7a3d00;padding:.6rem 1rem;display:flex;gap:1rem;align-items:center;flex-wrap:wrap">
-    <span>Tratamos tus datos personales según nuestro <a routerLink="/privacidad">aviso de privacidad</a>. Confirma que
-      lo leíste para seguir usando el portal.</span>
-    <button type="button" (click)="aceptarAviso()">Lo leí</button>
-  </div>
-  }
+@if (auth.currentRole() && !auth.currentRole()?.privacidadAceptada) {
+<div class="aviso-privacidad" role="alert">
+  <i class="ti ti-shield-lock"></i>
+  <p>Tratamos tus datos personales según nuestro <a routerLink="/privacidad">aviso de privacidad</a>. Confirma que lo leíste para seguir usando el portal.</p>
+  <button type="button" class="btn-primary chico" (click)="aceptarAviso()">Lo leí</button>
+</div>
+}
   <main>
     <router-outlet></router-outlet>
   </main>

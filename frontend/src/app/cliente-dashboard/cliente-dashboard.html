@@ -19,68 +19,91 @@
   <button class="tab" [class.active]="activeTab() === 'listado'" (click)="showTab('listado')">Listado de trámites</button>
   <button class="tab" [class.active]="activeTab() === 'nuevo'" (click)="showTab('nuevo')">Nuevo trámite</button>
 </div>
-
 @if (activeTab() === 'listado') {
   @if (cargando()) {
-    <p>Cargando trámites...</p>
+    <p class="muted">Cargando trámites...</p>
   } @else if (error()) {
     <p class="login-error">No se pudo conectar con el backend. ¿Está corriendo el servidor?</p>
   } @else if (tramites().length === 0) {
-    <p>Todavía no tienes trámites registrados.</p>
+    <div class="tarjeta vacio">
+      <span class="ico grande"><i class="ti ti-file-text"></i></span>
+      <h2>Todavía no tienes trámites</h2>
+      <p>Cuando inicies uno, aparecerá aquí con su estado.</p>
+      <button class="btn-primary" (click)="showTab('nuevo')">+ Nuevo trámite</button>
+    </div>
   } @else {
-    <table>
-      <thead>
-        <tr>
-          <th>Folio</th>
-          <th>Documento</th>
-          <th>Fecha</th>
-          <th>Firma</th>
-          <th>Estado</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (t of tramites(); track t.id) {
+    <div class="tabla">
+      <table>
+        <thead>
           <tr>
-            <td class="folio">{{ t.folio }}</td>
-            <td>{{ t.documento }}</td>
-            <td>{{ t.fecha }}</td>
-            <td>{{ t.requiereFirma ? 'Electrónica avanzada' : 'No requiere' }}</td>
-            <td><span class="badge" [class]="estadoClase(t.estado)">{{ estadoLabel(t.estado) }}</span></td>
-            <td><button class="row-action" (click)="abrir(t.id)">Ver flujo</button></td>
+            <th>Folio</th>
+            <th>Documento</th>
+            <th>Fecha</th>
+            <th>Firma</th>
+            <th>Estado</th>
+            <th></th>
           </tr>
-        }
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          @for (t of tramites(); track t.id) {
+            <tr>
+              <td class="folio">{{ t.folio }}</td>
+              <td>{{ t.documento }}</td>
+              <td>{{ t.fecha }}</td>
+              <td>{{ t.requiereFirma ? 'Electrónica avanzada' : 'No requiere' }}</td>
+              <td><span class="badge" [class]="estadoClase(t.estado)">{{ estadoLabel(t.estado) }}</span></td>
+              <td><button class="row-action" (click)="abrir(t.id)">Ver flujo</button></td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
   }
 }
 
 @if (activeTab() === 'nuevo') {
-  <div class="form-section">
-    <h2>Solicitar un nuevo trámite</h2>
-    <p>Elige el servicio. Luego completas los datos, revisas y editas tu documento, y al final pagas con Webpay desde el carrito.</p>
- 
-    <div class="doc-grid">
-      @for (s of servicios(); track s.id) {
-        <div class="doc-card" [class.selected]="servicioId() === s.id" (click)="servicioId.set(s.id)">
-          <h3>{{ s.name }}</h3>
-          <div class="price">{{ clp(s.price) }}</div>
-          <div class="signers">{{ s.requires_signature ? 'Con firma electrónica avanzada' : 'Sin firma' }}</div>
+  <div class="stack">
+    <section class="tarjeta">
+      <header>
+        <span class="ico"><i class="ti ti-file-plus"></i></span>
+        <div>
+          <h2>Solicitar un nuevo trámite</h2>
+          <p>Elige el servicio. Luego completas los datos, revisas y editas tu documento, y al final pagas con Webpay desde el carrito.</p>
         </div>
-      } @empty {
-        <p>No hay servicios disponibles por ahora.</p>
-      }
-    </div>
+      </header>
 
-    <div class="form-grid">
-      <div class="field full">
+      <div class="doc-grid">
+        @for (s of servicios(); track s.id) {
+          <div class="doc-card" [class.selected]="servicioId() === s.id" (click)="servicioId.set(s.id)">
+            <h3>{{ s.name }}</h3>
+            <div class="price">{{ clp(s.price) }}</div>
+            <div class="signers">{{ s.requires_signature ? 'Con firma electrónica avanzada' : 'Sin firma' }}</div>
+          </div>
+        } @empty {
+          <p>No hay servicios disponibles por ahora.</p>
+        }
+      </div>
+    </section>
+
+    <section class="tarjeta">
+      <header>
+        <span class="ico"><i class="ti ti-notes"></i></span>
+        <div>
+          <h2>Detalles</h2>
+          <p>Opcional. Cuéntanos lo que quieras que tengamos en cuenta.</p>
+        </div>
+      </header>
+
+      <div class="field">
         <label for="detalles">Detalles (opcional)</label>
         <textarea id="detalles" rows="4" maxlength="5000" [ngModel]="detalles()" (ngModelChange)="detalles.set($event)"></textarea>
       </div>
-    </div>
 
-    @if (errorNuevo()) { <p class="login-error">{{ errorNuevo() }}</p> }
-    <button class="btn-primary" [disabled]="creando() || servicioId() === null" (click)="crear()">Continuar</button>
+      @if (errorNuevo()) { <p class="login-error">{{ errorNuevo() }}</p> }
+      <div class="acciones-fin">
+        <button class="btn-primary" [disabled]="creando() || servicioId() === null" (click)="crear()">Continuar</button>
+      </div>
+    </section>
   </div>
 }
 

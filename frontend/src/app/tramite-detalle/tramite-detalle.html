@@ -241,33 +241,34 @@
 }
 }
 
-<!-- ===== Versiones y adjuntos ===== -->
 @if (t.documents.length) {
-<section class="panel">
-  <h3>Versiones del documento</h3>
-  <ul class="lista">
-    @for (d of t.documents; track d.id) {
-    <li>v{{ d.version }} · {{ d.created_at.slice(0, 16).replace('T', ' ') }}
-      <button class="row-action" (click)="bajarDocumento(d.id, d.version)">Descargar</button>
+<section class="tarjeta">
+  <header>
+    <span class="ico"><i class="ti ti-history"></i></span>
+    <div>
+      <h2>Versiones del documento</h2>
+      <p>Puedes descargar cualquiera de las versiones guardadas.</p>
+    </div>
+  </header>
+  <ul class="versiones">
+    @for (d of t.documents; track d.id; let primera = $first) {
+    <li>
+      <i class="ti ti-file-text"></i>
+      <div>
+        <b>Versión {{ d.version }}</b>
+        <small>{{ d.created_at.slice(0, 16).replace('T', ' ') }}</small>
+      </div>
+      @if (primera) { <span class="pill ok">Última</span> }
+      <button type="button" class="btn-ghost chico" (click)="bajarDocumento(d.id, d.version)">
+        <i class="ti ti-download"></i> Descargar
+      </button>
     </li>
     }
   </ul>
 </section>
 }
 
-@if (t.attachments.length || puedeAdjuntar()) {
-<section class="panel">
-  <h3>Adjuntos (PDF, máx. 2 MiB)</h3>
-  <ul class="lista">
-    @for (a of t.attachments; track a.id) {
-    <li>{{ a.name }} <button class="row-action" (click)="bajarAdjunto(a.id, a.name)">Descargar</button></li>
-    }
-  </ul>
-  @if (puedeAdjuntar()) {
-  <input type="file" accept="application/pdf" [disabled]="ocupado()" (change)="onArchivo($event)">
-  }
-</section>
-}
+
 
   <!-- ===== Datos del documento (redacción / observado) ===== -->
   <ng-template #editor>

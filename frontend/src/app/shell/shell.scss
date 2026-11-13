@@ -1,0 +1,10 @@
+.aviso-privacidad {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  width: min(1100px, calc(100% - 32px)); margin: 16px auto 0; padding: 12px 16px;
+  background: var(--amber-bg); color: var(--amber);
+  border-radius: 12px; font-size: 13.5px;
+
+  > .ti { font-size: 20px; flex: none; }
+  p { margin: 0; flex: 1 1 280px; line-height: 1.45; }
+  a { color: inherit; font-weight: 600; }
+}

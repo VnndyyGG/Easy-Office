@@ -145,9 +145,6 @@ export class ComercialDashboard implements OnInit {
     const t = this.detalle()!;
     return this.bajar(`/tramites/${t.id}/documentos/${docId}/descarga`, `${t.folio}-borrador-v${version}.pdf`);
   }
-  bajarAdjunto(adjId: number, nombre: string) {
-    return this.bajar(`/tramites/${this.detalle()!.id}/adjuntos/${adjId}/descarga`, nombre);
-  }
 
   diasEsperando(fecha: string) { return Math.max(0, Math.floor((Date.now() - Date.parse(fecha)) / DIA)); }
   esperaTexto(fecha: string) {

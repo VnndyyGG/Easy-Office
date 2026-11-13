@@ -93,7 +93,6 @@ export class TramiteDetalle implements OnInit {
 
   ultimaVersion = computed(() => this.tramite()?.documents[0]?.version ?? 0);
   pagoDelTramite = computed(() => this.pagos().find(p => p.case_id === this.id()) ?? null);
-  puedeAdjuntar = computed(() => ['borrador', 'pendiente_pago', 'en_redaccion', 'observado'].includes(this.estado()));
   plantillaSel = computed(() => this.plantillas().find(p => p.id === this.plantillaId()) ?? null);
   // Plantillas agrupadas por tipo de documento (domicilio tributario, arriendos, societario...)
   grupos = computed(() => {
@@ -698,25 +697,6 @@ export class TramiteDetalle implements OnInit {
     return res.content;
   }
 
-  // ---- Adjuntos (PDF ≤ 2 MiB) ----
-  async onArchivo(ev: Event) {
-    const input = ev.target as HTMLInputElement;
-    const file = input.files?.[0];
-    input.value = '';
-    if (!file) return;
-    if (file.size > 2 * 1024 * 1024) { this.error.set('El PDF no puede pesar más de 2 MiB.'); return; }
-    const base64 = await new Promise<string>((res, rej) => {
-      const r = new FileReader();
-      r.onload = () => res(String(r.result).split(',')[1]);
-      r.onerror = () => rej(new Error('No se pudo leer el archivo.'));
-      r.readAsDataURL(file);
-    });
-    await this.ejecutar(
-      () => firstValueFrom(this.api.subirAdjunto(this.id(), file.name, base64)),
-      'Adjunto subido.'
-    );
-  }
-
   // ---- Descargas autenticadas ----
   private async bajar(ruta: string, nombre: string) {
     try {
@@ -731,9 +711,6 @@ export class TramiteDetalle implements OnInit {
   }
   bajarDocumento(docId: number, version: number) {
     return this.bajar(`/tramites/${this.id()}/documentos/${docId}/descarga`, `${this.tramite()!.folio}-borrador-v${version}.pdf`);
-  }
-  bajarAdjunto(adjId: number, nombre: string) {
-    return this.bajar(`/tramites/${this.id()}/adjuntos/${adjId}/descarga`, nombre);
   }
   bajarComprobante(pagoId: number) {
     return this.bajar(`/pagos/${pagoId}/comprobante`, `comprobante-${pagoId}.pdf`);

@@ -1,5 +1,5 @@
 <main class="firmar">
-  <img src="logo.jpg" alt="Easy Office" class="logo">
+  <span class="logo-tile"><img src="logo.jpg" alt="Easy Office"></span>
   @if (cargando()) {
     <p>Cargando…</p>
   } @else if (!info()) {
@@ -25,13 +25,13 @@
       <p class="huella">Huella SHA-256 del texto que vas a firmar: <code>{{ info()!.documentSha256 }}</code></p>
 
       <section class="paso">
-        <h2>1. Recibe tu código</h2>
+        <h2><span class="n">1</span>Recibe tu código</h2>
         <button class="btn" [disabled]="ocupado()" (click)="pedirCodigo()">{{ codigoEnviado() ? 'Reenviar código' : 'Enviarme un código por correo' }}</button>
       </section>
 
       @if (codigoEnviado()) {
         <section class="paso">
-          <h2>2. Firma</h2>
+          <h2><span class="n">2</span>Firma</h2>
           <label>Código de 6 dígitos <input name="codigo" inputmode="numeric" maxlength="6" autocomplete="one-time-code" [(ngModel)]="codigo"></label>
           <label>Escribe tu nombre completo <input name="nombre" autocomplete="name" [(ngModel)]="nombreEscrito" [placeholder]="info()!.signer.name"></label>
           <label class="chk"><input type="checkbox" name="acepta" [(ngModel)]="acepta"> <span>{{ info()!.declaration.text }}</span></label>

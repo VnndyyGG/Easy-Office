@@ -6,7 +6,7 @@
 }
 .stepper li {
   flex: 1 1 130px; display: grid; grid-template-columns: 28px 1fr; column-gap: 10px; align-items: start;
-  padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--white);
+  padding: 12px; border: 1px solid var(--border); border-radius: 14px; background: var(--white);
   color: var(--ink-soft);
 }
 .dot {
@@ -21,10 +21,6 @@
 .current .dot { border-color: var(--green-1); color: var(--green-2); background: #fff; }
 .current.warn { border-color: var(--amber); background: var(--amber-bg); }
 .current.warn .dot { border-color: var(--amber); color: var(--amber); }
-
-.panel { margin: 0 0 22px; padding: 20px 22px; border: 1px solid var(--border); border-radius: 10px; background: var(--white); }
-.panel h2 { margin: 0 0 8px; font-size: 18px; }
-.panel h3 { margin: 0 0 10px; font-size: 15px; }
 .acciones { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
 .field input, .field select { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; font: inherit; }
 .field textarea { width: 100%; font-family: ui-monospace, Menlo, Consolas, monospace; }
@@ -129,4 +125,18 @@
   .total { display: flex; justify-content: space-between; align-items: baseline; margin-top: 14px; }
   .total span { font-size: 13px; color: var(--ink-soft); }
   .total strong { font-size: 22px; color: var(--green-2); }
+}
+
+
+.versiones {
+  list-style: none; margin: 0; padding: 0; display: grid; gap: 8px;
+
+  li {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 12px; border-radius: 11px; background: var(--surface); font-size: 13.5px;
+  }
+  li > .ti { color: var(--green-2); font-size: 19px; }
+  li > div { flex: 1; }
+  b { font-weight: 600; }
+  small { display: block; font-size: 12px; color: var(--ink-soft); }
 }
