@@ -158,7 +158,7 @@
       <tr [class.inactivo]="!u.active">
         <td>{{ u.name }}</td>
         <td>{{ u.email }}</td>
-        <td>{{ u.run || '—' }}</td>
+        <td>{{ u.rut || '—' }}</td>
         <td>
           <select class="compacto" [disabled]="ocupado()" [ngModel]="u.tipo" (ngModelChange)="cambiarRol(u, $event)">
             @for (r of roles; track r.key) { <option [value]="r.key">{{ r.label }}</option> }

@@ -88,7 +88,7 @@ export class AdminDashboard implements OnInit {
       (!rol || u.tipo === rol) &&
       (!q ||
         u.name.toLowerCase().includes(q) ||
-        (qRun !== '' && this.normalizarRun(u.run ?? '').includes(qRun))));
+        (qRun !== '' && this.normalizarRun(u.rut ?? '').includes(qRun))));
   });
 
   activos = computed(() => this.tramites().filter(t => !CERRADOS.includes(t.status)).length);
@@ -101,7 +101,7 @@ export class AdminDashboard implements OnInit {
     return filas.map(f => ({ ...f, label: this.estadoLabel(f.status), pct: Math.round((f.total / max) * 100) }));
   });
   private nombres = computed(() => new Map(this.usuarios().map(u => [u.id, u.name])));
-  private normalizarRun(run: string) { return run.replace(/[^0-9k]/gi, '').toLowerCase(); }
+  private normalizarRun(rut: string) { return rut.replace(/[^0-9k]/gi, '').toLowerCase(); }
   constructor(private api: AdminApi) { }
 
   ngOnInit() { this.cargarTodo(); }

@@ -95,4 +95,17 @@ export class Auth {
       Object.keys(localStorage).filter(k => k.startsWith(PREFIJO_AVANCE)).forEach(k => localStorage.removeItem(k));
     } catch { /* sin storage disponible */ }
   }
+
+    /** Registra que el usuario aceptó el aviso de privacidad vigente y actualiza el perfil local. */
+  async aceptarPrivacidad(version: string): Promise<void> {
+    const token = this.token();
+    if (!token) return;
+    await firstValueFrom(
+      this.http.post(`${API_URL}/privacidad/aceptar`, { version }, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+    );
+    const perfil = this.currentRole();
+    if (perfil) this.guardarSesion(token, { ...perfil, privacidadAceptada: true });
+  }
 }
