@@ -1124,7 +1124,7 @@ function createApp(db, options = {}) {
     if (error.type === 'entity.parse.failed') return res.status(400).json({ error: { code: 'INVALID_JSON', message: 'JSON inválido.' } });
     // Códigos SQLSTATE clase 23: violaciones de integridad (unique, FK, check, not null).
     if (/^23\d{3}$/.test(String(error.code))) return res.status(409).json({ error: { code: 'CONFLICT', message: 'La operación entra en conflicto con un registro existente.' } });
-    console.error('API error:', error.code || error.name);
+    console.error('API error:', req.method, req.originalUrl, error.code, error.message);
     res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Error interno del servidor.' } });
   });
   return app;
