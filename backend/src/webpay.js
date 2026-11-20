@@ -36,7 +36,10 @@ function createWebpay({ config = readConfig(), fetchFn = globalThis.fetch } = {}
         body: body ? JSON.stringify(body) : undefined,
         signal: AbortSignal.timeout(20000)
       });
-    } catch { throw new ApiError(502, 'WEBPAY_UNREACHABLE', 'No se pudo comunicar con Webpay. Intenta nuevamente.'); }
+    } catch (e) {
+      console.error('Webpay fetch falló:', e.cause?.code || e.name, e.message);
+      throw new ApiError(502, 'WEBPAY_UNREACHABLE', 'No se pudo comunicar con Webpay. Intenta nuevamente.');
+    }
     const data = await res.json().catch(() => ({}));
     if (!res.ok) { console.error('Webpay HTTP', res.status, method, path.replace(/\/[0-9a-f]{40,}/, '/<token>')); throw new ApiError(502, 'WEBPAY_ERROR', 'Webpay rechazó la solicitud.'); }
     return data;

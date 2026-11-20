@@ -134,12 +134,6 @@
           <p class="login-error" role="alert">{{ errorRegistro() }}</p>
           }
 
-          <!-- login.html: dentro del form de registro, antes del botón submit -->
-          <label class="privacidad-check">
-            <input type="checkbox" name="aceptaPrivacidad" [(ngModel)]="aceptaPrivacidad" required>
-
-            
-          </label>
 
           <button type="submit" class="btn-primary" [disabled]="cargando()">
             {{ cargando() ? 'Creando cuenta...' : 'Crear cuenta' }}
