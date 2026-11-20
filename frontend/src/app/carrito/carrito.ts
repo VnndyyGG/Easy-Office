@@ -30,7 +30,7 @@ export class Carrito implements OnInit, OnDestroy {
   sigueProcesando = signal(false);   // Webpay tarda más de lo normal: se deja de reconsultar sola y se ofrece hacerlo a mano
   seleccionados = computed(() => this.items().filter(i => this.seleccion().has(i.id)));
 
-  constructor(private api: Tramites, private route: ActivatedRoute, private router: Router) {}
+  constructor(private api: Tramites, private route: ActivatedRoute, private router: Router) { }
 
   ngOnInit() {
     const params = this.route.snapshot.queryParamMap;
@@ -42,9 +42,9 @@ export class Carrito implements OnInit, OnDestroy {
   ngOnDestroy() { if (this.timer) clearInterval(this.timer); }
 
   // ---- Carrito ----
-  async cargarCarrito() {
+  async cargarCarrito(conservarError = false) {
     this.cargando.set(true);
-    this.error.set('');
+    if (!conservarError) this.error.set('');
     try {
       const r = await firstValueFrom(this.api.getCarrito());
       this.items.set(r.items);
@@ -100,7 +100,7 @@ export class Carrito implements OnInit, OnDestroy {
     } catch (e) {
       this.error.set(mensajeError(e));
       this.ocupado.set(false);
-      this.cargarCarrito();
+      this.cargarCarrito(true);
     }
   }
 
