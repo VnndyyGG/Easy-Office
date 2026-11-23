@@ -272,7 +272,6 @@
 
   <!-- ===== Datos del documento (redacción / observado) ===== -->
   <ng-template #editor>
-    @if (primeraRedaccion()) {
     <div class="formulario">
       <div class="col">
         <section class="tarjeta">
@@ -280,7 +279,7 @@
             <span class="ico"><i class="ti ti-file-pencil"></i></span>
             <div>
               <h2>Completa los datos de tu documento</h2>
-              <p>Llena los datos y genera el documento. Después podrás leerlo y editarlo. Todavía no se te cobra nada.</p>
+              <p>Solo se editan tus datos: el texto del contrato es fijo y lo arma Easy Office con lo que ingreses. Todavía no se te cobra nada.</p>
             </div>
           </header>
           @if (!t.template_id) {
@@ -298,6 +297,9 @@
           </div>
           } @else if (plantillaSel()?.description) {
             <p class="muted descripcion">{{ plantillaSel()!.description }}</p>
+          }
+          @if (versionAntigua()) {
+            <p class="notice"><i class="ti ti-info-circle"></i> Tu versión anterior se guardó con el editor de texto libre. Vuelve a completar los datos para generar el documento.</p>
           }
         </section>
         @if (plantillaSel()) {
@@ -471,8 +473,12 @@
         }
         <div class="acciones">
           @if (plantillaSel() && faltantes().length) { <span class="muted faltan">Faltan {{ faltantes().length }} campo(s): {{ faltantes().slice(0, 3).join(', ') }}{{ faltantes().length > 3 ? '…' : '' }}</span> }
-          @if (rehacer()) { <button class="btn-ghost" [disabled]="ocupado()" (click)="rehacer.set(false)">Cancelar y mantener mi texto</button> }
-          <button class="btn-primary" [disabled]="ocupado() || !plantillaSel() || !puedeEnviar()" (click)="generarDocumento()">Generar documento</button>
+          <button class="btn-ghost" [disabled]="ocupado() || !puedeEnviar() || !hayCambiosSinGuardar()" (click)="guardar()">Guardar borrador</button>
+          @if (estado() === 'borrador') {
+            <button class="btn-primary" [disabled]="ocupado() || !puedeEnviar()" (click)="continuarAlPago()">Continuar al pago</button>
+          } @else {
+            <button class="btn-primary" [disabled]="ocupado() || !puedeEnviar()" (click)="enviarARevision()">Enviar a revisión</button>
+          }
         </div>
       </div>
 
@@ -500,28 +506,5 @@
         </div>
       </aside>
     </div>
-    } @else {
-    <section class="panel">
-        @if (estado() === 'borrador') {
-          <h2>Revisa y edita tu documento</h2>
-          <p>Este es el texto generado con tus datos. Puedes modificarlo directamente. Cuando esté listo, continúas al pago.</p>
-        } @else {
-          <h2>Corrige tu documento</h2>
-        }
-        <div class="field full">
-          <label for="contenido">Contenido (texto plano) · versión guardada: v{{ ultimaVersion() }}</label>
-          <textarea id="contenido" rows="16" [ngModel]="contenido()" (ngModelChange)="editarTexto($event)"></textarea>
-        </div>
-        <div class="acciones">
-          <button class="btn-ghost" [disabled]="ocupado() || !puedeEnviar() || !hayCambiosSinGuardar()" (click)="guardar()">Guardar borrador</button>
-          @if (estado() === 'borrador') {
-            <button class="btn-ghost" [disabled]="ocupado()" (click)="reabrirFormulario()">Volver al formulario</button>
-            <button class="btn-primary" [disabled]="ocupado() || !puedeEnviar()" (click)="continuarAlPago()">Continuar al pago</button>
-          } @else {
-            <button class="btn-primary" [disabled]="ocupado() || !puedeEnviar()" (click)="enviarARevision()">Enviar a revisión</button>
-          }
-        </div>
-    </section>
-    }
   </ng-template>
 }

@@ -19,7 +19,9 @@ export interface CaseRow {
   id: number; folio: string; service_name: string; title: string; details: string;
   amount: number; requires_signature: number; signature_level: 'ninguna' | 'simple' | 'avanzada'; status: string; created_at: string; updated_at: string;
 }
-export interface DocumentRow { id: number; version: number; content: string; created_at: string; }
+/** Lo que escribió el cliente. El texto (content) lo arma el servidor; null en versiones antiguas. */
+export interface DatosDocumento { values: Record<string, string>; clauses: ArticuloElegido[]; }
+export interface DocumentRow { id: number; version: number; content: string; created_at: string; template_id: number | null; form_data: DatosDocumento | null; }
 export interface AttachmentRow { id: number; name: string; sha256: string; created_at: string; }
 export interface CaseDetail extends CaseRow {
   template_id: number | null; documents: DocumentRow[]; attachments: AttachmentRow[];
@@ -201,8 +203,9 @@ export class Tramites {
   asignarFolioContrato(id: number, sucursal: string) {
     return this.http.post<{ folio: string }>(`${API}/tramites/${id}/folio-contrato`, { sucursal }, this.h());
   }
-  guardarDocumento(id: number, content: string, expectedVersion: number) {
-    return this.http.post<DocumentRow>(`${API}/tramites/${id}/documentos`, { content, expectedVersion }, this.h());
+  /** Se envían solo los datos del formulario; el servidor genera el texto del documento desde la plantilla. */
+  guardarDocumento(id: number, templateId: number, values: Record<string, string>, clauses: ArticuloElegido[], expectedVersion: number) {
+    return this.http.post<DocumentRow>(`${API}/tramites/${id}/documentos`, { templateId, values, clauses, expectedVersion }, this.h());
   }
 
 

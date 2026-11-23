@@ -30,9 +30,6 @@ interface Avance {
   plantillaId: number | null;
   valores: Record<string, string>;
   articulos: ArticuloElegido[];
-  contenido: string;
-  base: number;      // versión del servidor sobre la que se editó el texto
-  rehacer: boolean;
 }
 const EDITABLES = ['borrador', 'en_redaccion', 'observado'];
 // Con el trámite en revisión o después, el avance local ya no sirve y se borra (contiene RUT y direcciones).
@@ -71,11 +68,9 @@ export class TramiteDetalle implements OnInit {
   error = signal('');
   aviso = signal('');
 
-  contenido = signal('');
   plantillaId = signal<number | null>(null);
   valores = signal<Record<string, string>>({});
   articulos = signal<ArticuloElegido[]>([]);   // artículos elegidos (plantillas con {{clausulas}})
-  rehacer = signal(false);                      // volver al formulario aunque ya exista un documento (solo en borrador)
 
   // ---- Avance guardado en el navegador ----
   private restaurado = false;    // no se escribe nada hasta haber intentado recuperar lo anterior
@@ -147,15 +142,21 @@ export class TramiteDetalle implements OnInit {
     const base = sel.content.replace(/\{\{\s*clausulas\s*\}\}/g, () => arts || '[Artículos]');
     return rellenar(base, this.campos(), this.valores());
   });
-  // Primero: formulario → documento generado. Con una versión ya guardada: se edita el texto directamente.
-  primeraRedaccion = computed(() => this.ultimaVersion() === 0 || this.rehacer());
-  textoAGuardar = computed(() => (this.primeraRedaccion() ? this.generado() : this.contenido()));
-  hayCambiosSinGuardar = computed(
-    () => this.textoAGuardar() !== (this.tramite()?.documents[0]?.content ?? '')
-  );
-  puedeEnviar = computed(
-    () => this.textoAGuardar().trim() !== '' && (!this.primeraRedaccion() || this.faltantes().length === 0)
-  );
+  // El texto del documento es fijo (lo arma el servidor desde la plantilla): el cliente solo edita sus datos.
+  ultimoDoc = computed(() => this.tramite()?.documents[0] ?? null);
+  /** Huella estable de lo que escribió el cliente (ignora campos vacíos y el orden de las claves). */
+  private huella(plantillaId: number | null, v: Record<string, string>, a: ArticuloElegido[]) {
+    const limpio = (o: Record<string, string>) => Object.entries(o).filter(([, x]) => (x ?? '').trim() !== '').sort(([x], [y]) => x.localeCompare(y));
+    return JSON.stringify([plantillaId, limpio(v), a.map(x => [x.key, limpio(x.values)])]);
+  }
+  hayCambiosSinGuardar = computed(() => {
+    const d = this.ultimoDoc();
+    if (!d?.form_data) return true;   // sin versión guardada, o versión antigua sin datos: hay que guardar desde el formulario
+    return this.huella(this.plantillaId(), this.valores(), this.articulos())
+      !== this.huella(d.template_id, d.form_data.values, d.form_data.clauses);
+  });
+  versionAntigua = computed(() => this.ultimaVersion() > 0 && !this.ultimoDoc()?.form_data);
+  puedeEnviar = computed(() => !!this.plantillaSel() && this.faltantes().length === 0);
   // El backend no expone el motivo de la observación en el trámite; viaja en la notificación (ver nota de backend).
   observacion = computed(() =>
     this.notifs().find(n => n.case_id === this.id() && n.message.includes('observado'))?.message ?? ''
@@ -163,7 +164,7 @@ export class TramiteDetalle implements OnInit {
 
   /** Cambios que se perderían en otro dispositivo: formulario aún sin generar, o texto editado sin guardar. */
   sinGuardar = computed(() =>
-    this.tocado() && EDITABLES.includes(this.estado()) && (this.primeraRedaccion() || this.hayCambiosSinGuardar())
+    this.tocado() && EDITABLES.includes(this.estado()) && this.hayCambiosSinGuardar()
   );
 
   constructor(private api: Tramites, private router: Router, private auth: Auth) {
@@ -171,7 +172,6 @@ export class TramiteDetalle implements OnInit {
     effect(() => {
       const avance: Avance = {
         plantillaId: this.plantillaId(), valores: this.valores(), articulos: this.articulos(),
-        contenido: this.contenido(), base: this.ultimaVersion(), rehacer: this.rehacer(),
       };
       if (this.restaurado && this.tocado() && EDITABLES.includes(this.estado())) this.escribirAvance(avance);
     });
@@ -200,11 +200,7 @@ export class TramiteDetalle implements OnInit {
       this.articulos.set(a.articulos ?? []);
       algo = Object.keys(a.valores ?? {}).length > 0 || (a.articulos ?? []).length > 0;
     }
-    // El texto editado solo se recupera si sigue basado en la versión que hay en el servidor.
-    const textoNuevo = a.base === this.ultimaVersion() && !!a.contenido && a.contenido !== this.contenido();
-    if (textoNuevo) this.contenido.set(a.contenido);
-    if (a.rehacer && this.estado() === 'borrador') this.rehacer.set(true);
-    if (!algo && !textoNuevo) return;
+    if (!algo) return;
     this.recuperado.set(true);
     this.tocado.set(true);
   }
@@ -212,10 +208,19 @@ export class TramiteDetalle implements OnInit {
     this.borrarAvance();
     this.recuperado.set(false);
     this.tocado.set(false);
-    this.rehacer.set(false);
-    this.articulos.set([]);
-    this.valores.set(this.conDefectos(this.campos()));
-    this.contenido.set(this.tramite()?.documents[0]?.content ?? '');
+    this.aplicarDatosGuardados();
+  }
+
+  /** Vuelve el formulario a lo último guardado en el servidor (o a los valores por defecto si aún no hay versión). */
+  private aplicarDatosGuardados() {
+    const d = this.ultimoDoc();
+    if (d?.form_data && d.template_id === this.plantillaId()) {
+      this.valores.set({ ...this.conDefectos(this.campos()), ...d.form_data.values });
+      this.articulos.set(d.form_data.clauses ?? []);
+    } else {
+      this.articulos.set([]);
+      this.valores.set(this.conDefectos(this.campos()));
+    }
   }
 
   volver() {
@@ -249,8 +254,9 @@ export class TramiteDetalle implements OnInit {
       ) {
         await this.cargarFirma();
       }
-      this.contenido.set(t.documents[0]?.content ?? '');
-      if (t.template_id && this.plantillaId() === null && plantillas.items.some(p => p.id === t.template_id)) this.elegirPlantilla(String(t.template_id));
+      const idPlantilla = t.template_id ?? t.documents[0]?.template_id ?? null;
+      if (idPlantilla && this.plantillaId() === null && plantillas.items.some(p => p.id === idPlantilla)) this.elegirPlantilla(String(idPlantilla));
+      if (!this.restaurado) this.aplicarDatosGuardados();   // el formulario parte con lo último que se guardó
       if (!CONSERVAR.includes(t.status)) this.borrarAvance();
       if (!this.restaurado) { this.restaurarAvance(); this.restaurado = true; }
     } catch (e) {
@@ -638,29 +644,25 @@ export class TramiteDetalle implements OnInit {
     }
     return {};
   }
-  editarTexto(v: string) { this.contenido.set(v); this.tocado.set(true); }
   cambiarPlantilla(id: string) { this.elegirPlantilla(id); this.tocado.set(true); }
 
-  /** Paso 1: del formulario al documento. El backend valida RUT, correo y opciones; se guarda como versión nueva. NO cobra. */
-  generarDocumento() {
-    return this.ejecutar(async () => {
-      const texto = await this.generarEnServidor();
-      await firstValueFrom(this.api.guardarDocumento(this.id(), texto, this.ultimaVersion()));
-      this.rehacer.set(false);
-    }, 'Documento generado. Revísalo y edítalo si necesitas ajustar algo; después continúas al pago.');
+  /** Envía solo los datos del formulario. El servidor valida (RUT, correo, opciones), asigna el folio y genera el texto. */
+  private async guardarDatos() {
+    const sel = this.plantillaSel();
+    if (!sel) throw new Error('Selecciona un documento.');
+    if (this.faltantes().length) throw new Error('Faltan datos por completar.');
+    await this.asegurarFolio();
+    await firstValueFrom(this.api.guardarDocumento(this.id(), sel.id, this.valores(), this.articulos(), this.ultimaVersion()));
   }
 
-  reabrirFormulario() {
-    if (!confirm('Volver al formulario generará el documento de nuevo y reemplazará los cambios que hiciste al texto. ¿Continuar?')) return;
-    this.rehacer.set(true);
+  guardar() {
+    return this.ejecutar(() => this.guardarDatos(), 'Borrador guardado.');
   }
 
-  /** Paso 3: con el documento listo, recién ahora se pasa al pago. */
+  /** Con el documento listo, recién ahora se pasa al pago. */
   continuarAlPago() {
     return this.ejecutar(async () => {
-      if (this.hayCambiosSinGuardar()) {
-        await firstValueFrom(this.api.guardarDocumento(this.id(), this.textoAGuardar(), this.ultimaVersion()));
-      }
+      if (this.hayCambiosSinGuardar()) await this.guardarDatos();
       await firstValueFrom(this.api.cambiarEstado(this.id(), 'pendiente_pago'));
     }, 'Documento guardado. Ahora realiza el pago para enviarlo a revisión.');
   }
@@ -670,31 +672,11 @@ export class TramiteDetalle implements OnInit {
     return this.ejecutar(() => firstValueFrom(this.api.cambiarEstado(this.id(), 'borrador')));
   }
 
-  guardar() {
-    return this.ejecutar(
-      () => firstValueFrom(this.api.guardarDocumento(this.id(), this.textoAGuardar(), this.ultimaVersion())),
-      'Borrador guardado.'
-    );
-  }
-
-  // ---- Paso 3: enviar a revisión (guarda primero si hay cambios) ----
   enviarARevision() {
     return this.ejecutar(async () => {
-      if (this.hayCambiosSinGuardar() || this.ultimaVersion() === 0) {
-        const texto = this.primeraRedaccion() ? await this.generarEnServidor() : this.textoAGuardar();
-        await firstValueFrom(this.api.guardarDocumento(this.id(), texto, this.ultimaVersion()));
-      }
+      if (this.hayCambiosSinGuardar()) await this.guardarDatos();
       await firstValueFrom(this.api.cambiarEstado(this.id(), 'en_revision'));
     }, 'Documento enviado a revisión.');
-  }
-
-  /** Genera el texto final en el backend: valida RUT, correo y opciones antes de guardar. */
-  private async generarEnServidor(): Promise<string> {
-    await this.asegurarFolio();
-    const res = await firstValueFrom(this.api.renderPlantilla(this.plantillaSel()!.id,
-      { values: this.valores(), clauses: this.articulos() }));
-    if (!res.complete) throw new Error('Faltan datos por completar.');
-    return res.content;
   }
 
   // ---- Descargas autenticadas ----
