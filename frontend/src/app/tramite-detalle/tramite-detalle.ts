@@ -652,8 +652,26 @@ export class TramiteDetalle implements OnInit {
     if (!sel) throw new Error('Selecciona un documento.');
     if (this.faltantes().length) throw new Error('Faltan datos por completar.');
     await this.asegurarFolio();
-    await firstValueFrom(this.api.guardarDocumento(this.id(), sel.id, this.valores(), this.articulos(), this.ultimaVersion()));
-  }
+
+    // Solo se envían claves que la plantilla realmente declara (el backend rechaza las desconocidas).
+    const permitidas = new Set(sel.fields.map(f => f.key));
+    const values = Object.fromEntries(
+      Object.entries(this.valores()).filter(([k]) => permitidas.has(k))
+    );
+    const clauses = this.articulos()
+      .filter(a => this.defArticulo(a.key))
+      .map(a => {
+        const ks = new Set(this.defArticulo(a.key)!.fields.map(f => f.key));
+        return {
+          key: a.key,
+          values: Object.fromEntries(Object.entries(a.values).filter(([k]) => ks.has(k))),
+        };
+      });
+
+    await firstValueFrom(
+      this.api.guardarDocumento(this.id(), sel.id, values, clauses, this.ultimaVersion())
+    );
+  } 
 
   guardar() {
     return this.ejecutar(() => this.guardarDatos(), 'Borrador guardado.');

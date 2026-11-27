@@ -706,10 +706,10 @@ function createApp(db, options = {}) {
       ...row,
       template_id: svc ? svc.template_id : null,
       prefill,
-      documents: await all(
+      documents: (await all(
         'SELECT * FROM documents WHERE case_id=? ORDER BY version DESC',
         row.id
-      ),
+      )).map(d => ({ ...d, form_data: d.form_data ? JSON.parse(d.form_data) : null })),
       attachments: await all(
         'SELECT id,name,mime,sha256,created_at FROM attachments WHERE case_id=?',
         row.id
@@ -919,8 +919,7 @@ function createApp(db, options = {}) {
     );
   });
 
-  // Folio del contrato: correlativo por sucursal y año (LF-0153-2026). Se asigna una sola vez por trámite,
-  // al generar el documento, para no gastar números en borradores que nunca se completan.
+
   app.post('/api/tramites/:id/folio-contrato', roles('admin', 'comercial', 'cliente'), async (req, res) => {
     const row = await caseFor(req, true), b = req.body || {};
     if (row.contract_folio) return res.json({ folio: row.contract_folio });
@@ -941,15 +940,35 @@ function createApp(db, options = {}) {
   app.post('/api/tramites/:id/documentos', roles('admin', 'comercial', 'cliente'), async (req, res) => {
     const row = await caseFor(req, true), b = req.body || {};
     if (!['borrador', 'en_redaccion', 'observado'].includes(row.status)) v.fail(409, 'DOCUMENT_LOCKED', 'Solo se puede editar en borrador o con observaciones.');
+    if (b.content !== undefined) v.fail(400, 'CONTENT_NOT_ALLOWED', 'El documento no se puede enviar como texto: envía solo los datos (templateId, values, clauses).');
     const latest = (await one('SELECT COALESCE(MAX(version),0) AS version FROM documents WHERE case_id=?', row.id)).version;
     if (v.integer(b.expectedVersion, 'expectedVersion', 0) !== latest) v.fail(409, 'VERSION_CONFLICT', 'Existe una versión más reciente. Vuelve a cargar el documento.');
-    const content = v.text(b.content, 'content', 100000);
+
+    // La plantilla debe ser la del servicio contratado (si el servicio no fija una, vale cualquier plantilla activa).
+    const templateId = v.integer(b.templateId, 'templateId');
+    const svc = await one('SELECT template_id FROM services WHERE id=?', row.service_id);
+    if (svc?.template_id && svc.template_id !== templateId) v.fail(400, 'INVALID_TEMPLATE', 'Esa plantilla no corresponde a este trámite.');
+    const template = await templateRow(req, templateId);
+
+    if (b.values !== undefined && (b.values === null || typeof b.values !== 'object' || Array.isArray(b.values))) v.fail(400, 'VALIDATION_ERROR', 'values: objeto requerido.');
+    const values = { ...(b.values || {}) };
+    // El folio del contrato lo asigna el servidor; el cliente no puede escribirlo.
+    if (tpl.parseList(template.fields).some(f => f.key === 'folio')) {
+      if (!row.contract_folio) v.fail(409, 'FOLIO_REQUIRED', 'Primero se asigna el folio del contrato.');
+      values.folio = row.contract_folio;
+    }
+    // render valida cada campo (tipo, largo, opciones) y rechaza campos o artículos desconocidos.
+    const out = tpl.render(template, { values, clauses: b.clauses });
+    if (!out.complete) v.fail(400, 'INCOMPLETE_DOCUMENT', `Faltan datos por completar: ${out.missing.join(', ')}.`);
+
+    const formData = JSON.stringify({ values, clauses: b.clauses || [] });
     const documentId = await atomic(async () => {
-      const id = await insert('INSERT INTO documents(case_id,version,content,author_id,created_at) VALUES(?,?,?,?,?)', row.id, latest + 1, content, req.user.id, now());
+      const id = await insert('INSERT INTO documents(case_id,version,content,author_id,created_at,template_id,form_data) VALUES(?,?,?,?,?,?,?)', row.id, latest + 1, out.content, req.user.id, now(), template.id, formData);
       await audit(req.user.id, 'documento.version', 'tramite', row.id, { documentId: id, version: latest + 1 });
       await run('UPDATE cases SET updated_at=? WHERE id=?', now(), row.id); return id;
     });
-    res.status(201).json(await one('SELECT * FROM documents WHERE id=?', documentId));
+    const saved = await one('SELECT * FROM documents WHERE id=?', documentId);
+    res.status(201).json({ ...saved, form_data: JSON.parse(saved.form_data) });
   });
   app.get('/api/tramites/:id/documentos/:documentId/descarga', roles('admin', 'comercial', 'cliente'), async (req, res) => {
     const row = await caseFor(req), doc = await one('SELECT * FROM documents WHERE id=? AND case_id=?', v.id(req.params.documentId), row.id);
